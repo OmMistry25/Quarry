@@ -1,0 +1,10 @@
+node_modules/
+dist/
+work/
+coverage/
+pnpm-lock.yaml
+
+# Planning docs and the working agreement are prose source material, not code.
+# Reformatting them creates noise in documents Quarry's author owns.
+docs/
+CLAUDE.md

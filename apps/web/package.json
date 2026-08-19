@@ -1,0 +1,7 @@
+{
+  "name": "web",
+  "version": "0.0.0",
+  "private": true,
+  "description": "Quarry demo UI — placeholder until Phase 8.",
+  "type": "module"
+}

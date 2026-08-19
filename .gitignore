@@ -1,0 +1,34 @@
+# dependencies
+node_modules/
+.pnpm-store/
+
+# build output
+dist/
+*.tsbuildinfo
+.next/
+out/
+
+# Quarry scratch space: clones, stage artifacts, generated packages, zips.
+# Never commit anything under here.
+work/
+
+# test / tooling output
+coverage/
+.vitest/
+*.log
+npm-debug.log*
+pnpm-debug.log*
+
+# secrets — never commit, and never feed to an agent (CLAUDE.md invariant 2)
+.env
+.env.*
+!.env.example
+*.pem
+*.key
+id_rsa*
+
+# editor / OS
+.DS_Store
+.idea/
+.vscode/*
+!.vscode/extensions.json
