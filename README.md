@@ -36,6 +36,9 @@ pnpm build         # compile packages/core and packages/cli
 pnpm --filter cli dev -- --help
 ```
 
+CI runs `typecheck`, `lint`, `format:check` and `test` on every pull request and on pushes
+to `main`, against Node 20 (the floor declared in `engines`).
+
 ## Layout
 
 ```

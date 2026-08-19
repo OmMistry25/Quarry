@@ -82,6 +82,26 @@ No SPEC-vs-architecture behavioural conflict found on the first read.
   bin and does nothing but call `run()` and format errors. Importing a module with a top-level
   side effect from a test would run the CLI during the test run.
 
+### Branching model (decided after Phase 0 shipped)
+
+The repo was empty when Phase 0 started — zero commits, zero branches — so the first branch
+pushed became GitHub's default branch, and there was no base to open a pull request against.
+Resolved by promoting the Phase 0 tip to `main` and working phase-by-phase from there:
+
+- One branch per phase, one PR per phase, merged after review. This lines up exactly with
+  `CLAUDE.md`'s "stop for review at each phase boundary" — the PR *is* the review artifact,
+  and it gives each phase a clean revert unit.
+- CI (`.github/workflows/ci.yml`) gates every PR on `typecheck`, `lint`, `format:check` and
+  `test`, so a PR means something rather than being a formality.
+- CI pins **Node 20**, the floor declared in `package.json` `engines`, while local dev runs
+  Node 22. A dependency on a newer runtime should fail in CI, not on someone's machine.
+- **gitleaks is deliberately not in CI.** The official action wants a licence key in some
+  account types, and a flaky secrets gate is worse than none. The invariant that matters is
+  the S6 scan over the *generated package*, which runs locally in the pipeline. Revisit if
+  repo-level secret hygiene ever becomes a real risk.
+- Setting the repo's default branch is not exposed by the GitHub MCP tools, so that flip is
+  a manual step in repo settings.
+
 ### Out-of-scope temptations logged, not built
 
 - _(none yet)_
