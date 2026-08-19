@@ -26,6 +26,15 @@ export interface AgentInvocation {
   model?: string | undefined;
   cwd: string;
   timeoutMs: number;
+  /**
+   * `analyse` (default) — the agent reads a prompt and replies with JSON. No tools needed,
+   * because the context is already in the prompt.
+   *
+   * `write` — the agent writes files into `cwd` and then replies with JSON describing what
+   * it wrote. Used only by S5, which architecture-mvp.md specifies as "Claude Code *inside*
+   * an empty target dir with write access".
+   */
+  mode?: 'analyse' | 'write' | undefined;
 }
 
 export interface AgentReply {
@@ -65,6 +74,15 @@ function buildArgs(invocation: AgentInvocation): string[] {
   ];
 
   if (invocation.model !== undefined) args.push('--model', invocation.model);
+
+  if (invocation.mode === 'write') {
+    // acceptEdits rather than skipping permissions wholesale: the agent may write inside its
+    // own working directory without a prompt, and nothing more. The tool list is an explicit
+    // allowlist — no Bash, so a generation pass cannot install packages, run tests, or reach
+    // the network. Running the generated code is S6's job, in a sandbox.
+    args.push('--permission-mode', 'acceptEdits');
+    args.push('--allowedTools', 'Read', 'Write', 'Edit', 'Glob', 'Grep');
+  }
 
   return args;
 }
