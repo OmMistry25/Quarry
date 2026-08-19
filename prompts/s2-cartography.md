@@ -18,6 +18,31 @@ strength:
 3. **A documented boundary.** The README describes "the worker" or "the dashboard".
 4. **A directory whose name and contents are unambiguous** — `src/api/`, `etl/`, `infra/`.
 
+### Processes that share a package are still separate components
+
+One manifest does not always mean one component. When the repo's own deployment description —
+`compose.yaml` services, a `Procfile`, Kubernetes manifests, CI jobs, or the README — runs the
+same package as several long-lived processes (a web server, a queue worker, a scheduler, a
+consumer), each of those is its own component. They are deployed, scaled, and broken
+independently, which is what makes them separate things a team talks about.
+
+Split on that evidence, and only when the process has a directory of its own to point at:
+
+- a `tasks/` or `jobs/` directory run by a queue worker → a `worker` component, even though the
+  package around it has a single `pyproject.toml`
+- an `etl/`, `pipelines/` or `transforms/` directory run on a schedule → a `data-pipeline`
+
+Give the carved-out component its own paths, and exclude them from the parent with a negation
+so the two do not overlap:
+
+```
+{"id": "api",    "paths": ["myapp/**", "!myapp/tasks/**"]}
+{"id": "worker", "paths": ["myapp/tasks/**"]}
+```
+
+Do not invent processes the repo does not run. A `tasks.py` imported and called by the web
+process is a layer, not a component.
+
 Merge rather than split when unsure. A repo with one `package.json`, one `src/` and no
 workspace config is usually **one** component, not one per subdirectory. Splitting a small
 app into "routes", "services" and "models" is wrong: those are layers inside a component, not
