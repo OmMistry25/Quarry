@@ -91,7 +91,20 @@ A small, complete, _runnable_ repository mirroring the surface described above.
     that is how the planted bug gets verified.
 - **No external services.** {{STUB_STRATEGY}}
 - It must include its own tests, written in the source repo's testing style, which **pass**
-  against the starter code.
+  against the starter code. This is checked by running them, and it is the most common reason
+  a package is rejected.
+
+  **You cannot run these tests, so assert only what you are certain of.** Every failure so
+  far has been the same shape: a suite describing what the author _meant_ the code to do,
+  against an implementation that does something slightly different. A UI test asserting an
+  element is absent, a hint that appears under a condition you did not quite implement, a
+  disabled state you described but did not wire.
+
+  Prefer few, simple, obviously-true assertions over a comprehensive suite you are guessing
+  at. Before you finish, read each test beside the code it exercises and satisfy yourself the
+  assertion follows from what you actually wrote — not from what you were aiming for. A
+  smaller suite that passes is worth far more here than a thorough one that does not.
+
 - Include whatever config the stack genuinely needs and nothing more.
 
 `candidate/README.md` covers: what the project is, the one-command setup, how to run tests,
