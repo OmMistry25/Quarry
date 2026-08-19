@@ -14,6 +14,7 @@ import {
 } from '../agent/referenceMaterial.js';
 import { runAgent, type AgentAttempt } from '../agent/runAgent.js';
 import { QuarryError } from '../errors.js';
+import { isVerifyTestFile, VERIFY_TEST_NAMING } from '../verify/verifyTestName.js';
 import type { Components } from '../schemas/components.js';
 import type { Ingest } from '../schemas/ingest.js';
 import { GenerationReply, Meta, META_SCHEMA_VERSION } from '../schemas/meta.js';
@@ -145,14 +146,19 @@ export async function generate(options: GenerateOptions): Promise<GenerateResult
     // Trust the filesystem, not the reply: an agent that says it wrote a file and did not is
     // a failure worth catching here rather than in S6.
     const onDisk = await listFiles(targetDir);
-    await assertPackageShape(onDisk, {
-      requiresVerifyTest: task.requiresBugDemonstration,
-      requiresDesignNote: seniority.requiresDesignNote,
-    });
 
+    // Move the output in *before* checking its shape. A rejected package is the most
+    // expensive thing to reproduce — six to thirteen minutes of generation — so the evidence
+    // has to survive the rejection rather than being deleted with the temp directory.
     const packageDir = path.join(options.run.dir, 'package');
     await fs.rm(packageDir, { recursive: true, force: true });
     await fs.cp(targetDir, packageDir, { recursive: true });
+
+    await assertPackageShape(onDisk, {
+      requiresVerifyTest: task.requiresBugDemonstration,
+      requiresDesignNote: seniority.requiresDesignNote,
+      packageDir,
+    });
 
     const meta = Meta.parse({
       schemaVersion: META_SCHEMA_VERSION,
@@ -193,6 +199,10 @@ export async function generate(options: GenerateOptions): Promise<GenerateResult
   } finally {
     await fs.rm(targetDir, { recursive: true, force: true });
   }
+}
+
+function basename(filePath: string): string {
+  return filePath.slice(filePath.lastIndexOf('/') + 1);
 }
 
 function taskBrief(
@@ -252,7 +262,7 @@ async function listFiles(root: string): Promise<string[]> {
  */
 async function assertPackageShape(
   files: string[],
-  wants: { requiresVerifyTest: boolean; requiresDesignNote: boolean },
+  wants: { requiresVerifyTest: boolean; requiresDesignNote: boolean; packageDir: string },
 ): Promise<void> {
   const problems: string[] = [];
 
@@ -264,8 +274,11 @@ async function assertPackageShape(
   if (!has((file) => file === 'interviewer/answer-key.md')) {
     problems.push('interviewer/answer-key.md');
   }
-  if (wants.requiresVerifyTest && !has((file) => /^interviewer\/verify\.test\./.test(file))) {
-    problems.push('interviewer/verify.test.*');
+  if (
+    wants.requiresVerifyTest &&
+    !has((file) => file.startsWith('interviewer/') && isVerifyTestFile(basename(file)))
+  ) {
+    problems.push(`interviewer/<verification test> (${VERIFY_TEST_NAMING})`);
   }
   // Without the fix as code, S6 cannot demonstrate the planted bug at all.
   if (wants.requiresVerifyTest && !has((file) => file.startsWith('interviewer/fix/'))) {
@@ -277,8 +290,9 @@ async function assertPackageShape(
 
   if (problems.length > 0) {
     throw new QuarryError(
-      `The generator did not write: ${problems.join(', ')}. Wrote ${files.length} file(s): ` +
-        `${files.slice(0, 20).join(', ')}${files.length > 20 ? ' …' : ''}`,
+      `The generator did not write: ${problems.join(', ')}.\n` +
+        `It wrote ${files.length} file(s); inspect them at ${wants.packageDir}\n` +
+        files.map((file) => `  ${file}`).join('\n'),
       { stage: 's5' },
     );
   }
@@ -292,7 +306,7 @@ async function assertPackageShape(
   }
 
   // The verification test must never reach the candidate.
-  const leaked = candidateFiles.filter((file) => /verify\.test\./.test(file));
+  const leaked = candidateFiles.filter((file) => isVerifyTestFile(basename(file)));
   if (leaked.length > 0) {
     throw new QuarryError(
       `The verification test leaked into candidate/: ${leaked.join(', ')}. It gives the ` +

@@ -68,12 +68,16 @@ you have planted it in the wrong place.`,
       'plausibly have written it. The fix. The test the candidate should add.',
     requiresBugDemonstration: true,
     interviewerExtras: [
-      '  verify.test.<ext> the verification-only test (see below)',
+      '  <verify test>     the verification-only test — see below for the name',
       '  fix/              the corrected version of every file the fix touches',
     ],
-    promptSections: `### interviewer/verify.test.<ext>
+    promptSections: `### The verification test
 
-A single test file that Quarry runs to prove the task is real. It must:
+A single test file in \`interviewer/\`, named so the project's own runner would collect it:
+**\`verify.test.<ext>\`** for JavaScript or TypeScript, **\`test_verify.py\`** for Python. Do not
+write \`verify.test.py\` — pytest does not collect that.
+
+Quarry runs it to prove the task is real. It must:
 
 - **Fail** against \`candidate/\` as shipped.
 - **Pass** once the fix described in the answer key is applied.
@@ -92,7 +96,7 @@ inside \`candidate/\`, but under \`interviewer/fix/\`. If the bug is in
 \`candidate/src/services/booking.ts\`, write \`interviewer/fix/src/services/booking.ts\`
 containing that whole file exactly as it should read once fixed.
 
-Quarry copies \`candidate/\`, overlays these files on top, and runs \`verify.test.<ext>\` against
+Quarry copies \`candidate/\`, overlays these files on top, and runs the verification test against
 the result. That test must fail before the overlay and pass after it, so these files must be
 the real fix and nothing else — do not also tidy unrelated code here.
 

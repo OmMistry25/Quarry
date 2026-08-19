@@ -2,6 +2,7 @@ import fs from 'node:fs/promises';
 import path from 'node:path';
 
 import { runCommand, TEST_TIMEOUT_MS, type CommandResult } from './sandbox.js';
+import { isVerifyTestFile } from './verifyTestName.js';
 
 /**
  * Bug demonstrability (SPEC S6): the planted bug must be *provable*, not merely claimed.
@@ -39,7 +40,7 @@ async function findVerifyTest(packageDir: string): Promise<string | undefined> {
     .readdir(path.join(packageDir, 'interviewer'), { withFileTypes: true })
     .catch(() => []);
 
-  return entries.find((entry) => entry.isFile() && /^verify\.test\./.test(entry.name))?.name;
+  return entries.find((entry) => entry.isFile() && isVerifyTestFile(entry.name))?.name;
 }
 
 /**
