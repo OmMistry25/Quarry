@@ -36,3 +36,40 @@ export { runAgent, type AgentAttempt, type AgentResult } from './agent/runAgent.
 export type { AgentTransport, AgentInvocation, AgentReply } from './agent/claude.js';
 export { DEFAULT_CONTEXT_BUDGET, type ContextBudget } from './agent/context.js';
 export { createRunDir, type RunDir } from './run.js';
+
+export { roleMenu, scoreRole, computeScore, assertRoleSupported } from './stages/s3-roles.js';
+export { Roles, ROLES_SCHEMA_VERSION, type RoleCard, type RoleRating } from './schemas/roles.js';
+export {
+  ROLE_ARCHETYPES,
+  ROLE_IDS,
+  roleArchetype,
+  type RoleId,
+  type RoleArchetype,
+} from './archetypes/roles.js';
+
+export {
+  surfaceSelection,
+  pickSurface,
+  rankSurfaces,
+  type SurfaceSelectionOptions,
+  type SurfaceSelectionResult,
+} from './stages/s4-surfaces.js';
+export {
+  Surfaces,
+  SURFACES_SCHEMA_VERSION,
+  surfaceTotal,
+  type Surface,
+  type SurfaceScores,
+} from './schemas/surfaces.js';
+export {
+  DEFAULT_SURFACE_BUDGET,
+  buildSurfaceContext,
+  type SurfaceContextBudget,
+} from './agent/surfaceContext.js';
+export {
+  componentMatcher,
+  filesForComponent,
+  isTestPath,
+  isAssessableLanguage,
+  assessableLanguages,
+} from './components/match.js';

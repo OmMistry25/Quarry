@@ -1,0 +1,61 @@
+{
+  "surfaces": [
+    {
+      "id": "stock-adjustment",
+      "title": "Stock adjustment with non-negative invariant",
+      "componentId": "mini-ts-api",
+      "paths": [
+        "src/services/inventory.ts",
+        "src/routes/items.ts",
+        "src/db/items.ts",
+        "test/inventory.spec.ts"
+      ],
+      "summary": "Applies a signed integer delta to an item's stock level via POST /items/:sku/adjust, validated through a zod schema and routed through the InventoryError -> HTTP status mapping. Rejects any adjustment that would take quantity below zero, and otherwise persists and returns the updated item.",
+      "scores": {
+        "isolation": 0.85,
+        "representativeness": 0.9,
+        "richness": 0.8
+      },
+      "rationale": "Only touches its own service, the route layer, and db/items.ts (a thin prepared-statement wrapper over better-sqlite3) plus connection.ts for the db handle; no other service is pulled in. It sits on the main feature path and already has a dedicated vitest covering the below-zero rejection with a regex match on the error message, which is a strong signal this is core, tested behaviour. Richness comes from the boundary arithmetic (next = quantity + delta), the 404-vs-422 branch split, and the InventoryError status-code plumbing through sendError in the route.",
+      "assessmentIdea": "Plant an off-by-one in the boundary check (change `next < 0` to `next <= 0`, or vice versa) so an adjustment landing exactly on zero is wrongly rejected or wrongly allowed to go negative; the existing test only exercises delta=-4 against quantity=1, so a boundary-exact case would slip through unnoticed."
+    },
+    {
+      "id": "item-catalog-management",
+      "title": "Item catalog: create, fetch, and warehouse-filtered listing",
+      "componentId": "mini-ts-api",
+      "paths": [
+        "src/services/inventory.ts",
+        "src/routes/items.ts",
+        "src/db/items.ts",
+        "test/inventory.spec.ts"
+      ],
+      "summary": "Covers POST /items (create, rejecting duplicate SKUs with 409), GET /items/:sku (404 when missing), and GET /items with an optional warehouse query filter that switches which prepared SQL statement runs. Backed directly by db/items.ts's CRUD functions.",
+      "scores": {
+        "isolation": 0.85,
+        "representativeness": 0.75,
+        "richness": 0.6
+      },
+      "rationale": "Same shallow dependency footprint as the adjustment surface -- only db/items.ts and connection.ts underneath -- so it lifts out cleanly. Representativeness is slightly lower than adjustment/shipment because there's no dedicated conflict/listing test (inventory.spec.ts only exercises the plain create-then-read path), so test coverage for the 409 duplicate case and the warehouse filter branch is a gap a candidate could be asked to close. Richness is moderate: duplicate-SKU conflict, not-found 404, and the conditional SQL branch for warehouse filtering give a few places logic can be subtly wrong, though each individual branch is short.",
+      "assessmentIdea": "Plant a bug in the duplicate check (e.g. createItem checks findItem by a stale/incorrect field, or the warehouse filter in listItems uses the wrong SQL parameter binding so it silently returns all items instead of filtering), and ask the candidate to add a case-insensitive SKU lookup or pagination to the listing."
+    },
+    {
+      "id": "shipment-recording",
+      "title": "Shipment recording with stock decrement and log entry",
+      "componentId": "mini-ts-api",
+      "paths": [
+        "src/services/shipping.ts",
+        "src/routes/shipments.ts",
+        "src/services/inventory.ts",
+        "test/shipments.spec.ts"
+      ],
+      "summary": "POST /shipments validates sku and a positive quantity, decrements the item's stock by calling adjustStock with a negated quantity, and inserts a row into the shipments table with a generated timestamp. Returns the recorded shipment on success.",
+      "scores": {
+        "isolation": 0.6,
+        "representativeness": 0.85,
+        "richness": 0.7
+      },
+      "rationale": "Deliberately calls into the sibling inventory service (adjustStock) to reuse the non-negative invariant, so it isn't as self-contained as the pure adjustment surface -- a generated mini-repo would need to keep inventory.ts alongside it, which is a light, in-component dependency rather than a cross-service one. It has its own test asserting the post-shipment quantity, and richness comes from the double validation (route-level zod positive-int check plus service-level <=0 check), the derived negative delta, and the extra shipments-table insert that must stay consistent with the stock decrement.",
+      "assessmentIdea": "Plant a bug where the shipment row is inserted with the pre-decrement quantity, or where recordShipment passes the positive quantity (not negated) into adjustStock so stock increases instead of decreases on a shipment; alternatively, ask the candidate to extend the endpoint with a GET /shipments/:sku history listing."
+    }
+  ]
+}
