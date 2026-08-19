@@ -659,6 +659,41 @@ Worth putting to reviewers directly, since it is a product question rather than 
 `--role frontend --seniority junior` fall back to an extension, or refuse with an explanation?
 Falling back silently would be the wrong kind of helpful — the seniority knob means something.
 
+### The < 10 minute target is missed on real repos, and not by a little
+
+Measured from the two verified packages, S5 generation **alone**:
+
+| Repo | S5 generation | Cost | Attempts |
+|---|---|---|---|
+| `expressjs/express` | **874 s (14.6 min)** | $4.61 | 1 |
+| `psf/requests` | **863 s (14.4 min)** | $5.39 | 1 |
+
+SPEC acceptance 1 and `goals.md` metric 3 both require **repo URL → downloadable package in
+under 10 minutes**, and `mvp.md`'s demo storyline promises "download zip in ~5–8 min". One
+stage is already 45% over the budget for the whole pipeline, before ingest, cartography,
+surface selection or verification. A run needing its repair loop took **31 minutes**.
+
+The fixture hid this completely: it generates in ~6 minutes because it is 16 files.
+
+This is not a bug and there is no obvious fix that is free. The time is spent writing 13–25
+files of real code, so it scales with *output*, not with the reference material — trimming
+input will not move it much. The levers, all of them trade-offs:
+
+- **A faster model for S5.** `--model` is already plumbed through. Untested for quality, and
+  S5 is the stage where quality matters most.
+- **A smaller candidate repo.** SPEC says 10–25 files; the low end would be quicker and
+  thinner.
+- **Stream progress and let the wait be visible.** Phase 8's UI streams stage events, which
+  changes how ten minutes *feels* without changing what it costs. The demo is a screen-share,
+  not a race.
+- **Change the target.** The number in the docs was written before anything had been
+  measured against a real repo.
+
+Worth deciding with the reviewer interviews in mind: a hiring manager waiting for a take-home
+they will spend an hour reviewing may not care whether it took 8 minutes or 15. The 10-minute
+figure was a guess, and it now has data against it. Not changed unilaterally — SPEC wins on
+behaviour, and this is a stated acceptance criterion.
+
 ### Out-of-scope temptations logged, not built
 
 - _(none yet)_
