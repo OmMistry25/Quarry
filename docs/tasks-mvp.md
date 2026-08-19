@@ -16,9 +16,9 @@ Rules: work top to bottom. Check items off in this file as they're completed. Ea
 - ✅ Check: `quarry ingest <url>` produces valid `ingest.json` on a real public repo.
 
 ## Phase 2 — Agent wrapper + S2 Cartography
-- [ ] `runAgent()` wrapper: execa → `claude -p --output-format json`, zod parse, 2 retries with error feedback
-- [ ] `prompts/s2-cartography.md` with components.json contract
-- [ ] Curated context builder (ingest.json + README/docs + manifests only)
+- [x] `runAgent()` wrapper: execa → `claude -p --output-format json`, zod parse, 2 retries with error feedback
+- [x] `prompts/s2-cartography.md` with components.json contract
+- [x] Curated context builder (ingest.json + README/docs + manifests only)
 - ✅ Check: `quarry map <url>` emits sane `components.json` for (a) a single-app repo and (b) a monorepo.
 
 ## Phase 3 — S3 Role menu + S4 Surface selection

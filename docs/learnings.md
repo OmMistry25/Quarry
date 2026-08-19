@@ -162,6 +162,102 @@ Resolved by promoting the Phase 0 tip to `main` and working phase-by-phase from 
   "the biggest thing here is a language we do not assess" rather than assuming the top
   language is the relevant one.
 
+---
+
+## Phase 2 — Agent wrapper + S2 Cartography
+
+### The CLAUDE.md leak (found by testing, not by reading)
+
+`claude -p` auto-discovers CLAUDE.md by walking **up** from its working directory. Quarry's
+`work/` lives inside Quarry's own checkout, so every agent call started there would silently
+carry Quarry's working agreement into the prompt — an agent asked to map someone else's repo
+would be reading instructions about synthesis rules and phase discipline.
+
+Verified rather than assumed: asked a headless run inside the repo whether its context
+mentioned a project called Quarry, and it said **yes**. From a temp directory outside the
+repo, **no**.
+
+So `runAgent()` defaults to a fresh temp dir outside the repo, and there is a test asserting
+the cwd it hands the transport is not inside the checkout. **This will bite again in Phase
+4**: S5 runs Claude Code *inside* the target directory it is writing into, which lives under
+`work/`. That stage needs its own answer — most likely generating into a temp dir and moving
+the result into the run directory afterwards.
+
+### Agent invocation flags
+
+Every call passes flags that would otherwise let the operator's machine leak into results:
+
+- `--strict-mcp-config` with no `--mcp-config` — no MCP servers. Without it, every Quarry
+  call drags in whatever connectors the user has configured, at real token cost and with
+  real nondeterminism.
+- `--setting-sources ''` — ignore user/project/local settings.
+- `--disable-slash-commands` — the operator's skills are not part of this contract.
+- `--system-prompt` — replaces Claude Code's default system prompt, which is written for
+  interactive coding and is both large and off-task.
+
+Measured effect of the lean configuration on a trivial call: **$0.263 → $0.189**. The floor
+is ~31k cache-creation tokens of tool definitions, which there is no flag to remove.
+
+### Observed costs and latency (useful against the architecture doc's $1–3 per run)
+
+| Repo | Components | Attempts | Cost | Wall clock |
+|---|---|---|---|---|
+| `mini-ts-api` fixture | 1 | 1 | $0.04 | 11 s |
+| `trpc/trpc` | 11 | 1 | $0.41 | 87 s |
+| `pnpm/pnpm` | 5 | 1 | $0.47 | 87 s |
+
+No retries were needed on any real repo, which is a good sign for the prompt but means the
+retry path is only covered by unit tests with an injected transport.
+
+### The curated context builder, and two starvation bugs it had
+
+`architecture-mvp.md` calls for curated context; the shape chosen is a **directory map**
+(per-directory file counts, LOC and top languages, depth-limited) plus **manifest contents**
+plus **doc contents**. The raw tree is never sent. Compression achieved: `pnpm/pnpm`'s 1 MB
+`ingest.json` renders to a 111 kB context.
+
+Two bugs surfaced only by running it against real repos:
+
+1. **Manifests starved docs.** With one shared byte budget, `pnpm/pnpm`'s 1,458 manifests
+   consumed the entire allowance and the agent received **zero prose** — on the repo that
+   most needed it. Fixed with `manifestShare` (0.55): manifests still get first refusal, but
+   cannot take everything, and unspent allowance flows to docs.
+2. **The directory map had no budget at all.** A synthetic 60-package repo showed the map
+   eating the whole allowance before manifests were reached; a few thousand directories
+   would starve manifests *and* docs. Fixed with `directoryShare` (0.3): when rows do not
+   fit, the directories with the most code are kept and the rest are counted in a trailing
+   note, so the map degrades into a summary rather than being cut off mid-tree.
+
+The fix visibly improved output: `pnpm/pnpm` went from 7 components with no doc attributions
+to 5 better ones citing real documentation paths — consolidating a spuriously split `pnpr`
+and dropping a directory that was never a component.
+
+### Decisions
+
+- **Referential integrity is enforced in the zod schema, not afterwards.** A `depends_on`
+  pointing at a non-existent id, a self-dependency, or a duplicate id fails the parse — so
+  the agent gets told about it and retries, rather than S3 tripping over it later.
+- **Retry feedback names the specific failure.** The zod issues are appended to the original
+  prompt, and each retry carries exactly one rejection block rather than compounding. A bare
+  "try again" tends to reproduce the same malformed shape.
+- **Prompt templates use `{{PLACEHOLDER}}` substitution and nothing else** — no conditionals,
+  no loops. A prompt with logic in it is a prompt nobody can review. Missing values throw
+  rather than sending a literal `{{CONTEXT}}` to the agent.
+- **The prompts directory resolves via `import.meta.url`** at the same relative depth from
+  `src/` and `dist/`, so it works under vitest and from the build without a copy step.
+- **The model is not pinned.** `--model` is plumbed through and defaults to the CLI's choice.
+  Pinning would be more reproducible but goes stale; revisit if results start drifting.
+- **`--json-schema` was left unused.** The CLI offers structured-output validation, which
+  would reduce retries, but `architecture-mvp.md` specifies zod-parse-and-retry and that is
+  what is built. Worth revisiting as a belt-and-braces addition once the pipeline is proven.
+
+### Noted for later phases
+
+- The retry path has never fired against a real repo. If Phase 3's S4 prompt is harder to
+  satisfy, watch whether two retries is actually enough.
+- `trpc/trpc` hit the manifest ceiling exactly (40 of them). If a repo needs more than 40
+  manifests to be understood, the cap — not the byte budget — is what will bite first.
+
 ### Out-of-scope temptations logged, not built
 
 - _(none yet)_
