@@ -270,3 +270,52 @@ describe('environmental failures', () => {
     expect(report.install.timedOut).toBe(false);
   }, 60_000);
 });
+
+describe('placing the verification test', () => {
+  it('lands it where the project keeps its tests, not where a name guess suggests', async () => {
+    // Regression from a real documenso frontend package: tests live in src/test/, but the
+    // old heuristic checked root-level names in order and matched `src` first. The file
+    // landed one level too high and every relative import in it resolved outside the
+    // project, so the fix "did not fix it" — when in fact it had never run.
+    const candidate = path.join(packageDir, 'candidate');
+    await fs.mkdir(path.join(candidate, 'src', 'test'), { recursive: true });
+    await fs.mkdir(path.join(packageDir, 'interviewer'), { recursive: true });
+
+    await fs.writeFile(
+      path.join(candidate, 'src', 'service.mjs'),
+      'export const answer = () => 41;\n',
+    );
+    // Three shipped tests in src/test/ — the real test directory.
+    for (const name of ['a', 'b', 'c']) {
+      await fs.writeFile(
+        path.join(candidate, 'src', 'test', `${name}.test.mjs`),
+        "import { answer } from '../service.mjs';\nif (typeof answer !== 'function') process.exit(1);\n",
+      );
+    }
+    await fs.writeFile(
+      path.join(candidate, 'run-tests.mjs'),
+      `const target = process.argv[2];\n` +
+        `if (target) { await import(new URL(target, import.meta.url).href); }\n` +
+        `else { const { answer } = await import('./src/service.mjs'); if (typeof answer !== 'function') process.exit(1); }\n` +
+        `console.log('ok');\n`,
+    );
+    // Imports '../service.mjs' — only resolvable from src/test/.
+    await fs.writeFile(
+      path.join(packageDir, 'interviewer', 'verify.test.mjs'),
+      "const { answer } = await import('../service.mjs');\nif (answer() !== 42) { process.exit(1); }\n",
+    );
+    await fs.mkdir(path.join(packageDir, 'interviewer', 'fix', 'src'), { recursive: true });
+    await fs.writeFile(
+      path.join(packageDir, 'interviewer', 'fix', 'src', 'service.mjs'),
+      'export const answer = () => 42;\n',
+    );
+
+    const report = await verify({ run, meta: metaForNode, now: NOW });
+
+    // Fails on the starter (41), passes once the fix lands (42). Neither is possible unless
+    // the file was placed where its relative import resolves.
+    expect(report.bugDemo?.failsOnStarter).toBe(true);
+    expect(report.bugDemo?.passesOnFixed).toBe(true);
+    expect(report.bugDemo?.ok).toBe(true);
+  }, 120_000);
+});
