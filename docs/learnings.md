@@ -694,6 +694,49 @@ they will spend an hour reviewing may not care whether it took 8 minutes or 15. 
 figure was a guess, and it now has data against it. Not changed unilaterally — SPEC wins on
 behaviour, and this is a stated acceptance criterion.
 
+### Frontend does not work yet, and the reason is testable assertions about the DOM
+
+**Result: backend works on two languages; frontend produces no verified package.**
+
+| Repo | Role | Archetype | Result |
+|---|---|---|---|
+| `expressjs/express` | backend | bug-hunt | ✅ verified, 21 kB |
+| `psf/requests` | backend | bug-hunt | ✅ verified, 19.8 kB |
+| `documenso/documenso` | frontend | bug-hunt | ❌ ×3 — shipped suite catches the bug |
+| `documenso/documenso` | frontend | extension | ❌ ×2 — starter fails its own tests |
+
+Five generation attempts, both archetypes, every one rejected by S6 for the same underlying
+reason: **the generated React tests do not pass against the generated React components.**
+Failures are always testing-library assertions — an element expected absent that is present,
+`getByTestId` matching several nodes, a hint that renders under a condition the component
+does not implement.
+
+The generator has no Bash tool by design (Phase 4), so it cannot run what it writes. For
+backend code that is survivable: an assertion about a returned value or a status code is
+easy to get right by reading. An assertion about rendered DOM is not — it depends on how
+the whole tree renders, which is exactly the thing that needs executing to know.
+
+So the difficulty is not the frontend *archetype* — its stub strategy produced a working
+Vite + React + vitest + testing-library package that installs and runs, and the extension
+variant was structurally perfect on its first live run (bug demonstrability correctly skipped,
+`interviewer/` correctly holding only the rubric and answer key, overlap clean). The
+difficulty is writing DOM assertions blind.
+
+Options, none free, none taken here:
+
+- **Let S5 run the tests.** Add Bash to the generation pass so it can iterate until its own
+  suite passes. This is the fix that addresses the cause. It contradicts the Phase 4 decision
+  to deny S5 a shell — which was made to keep generation off the network and out of package
+  installs — and it would make the slowest stage slower still.
+- **Ask for far simpler frontend tests.** Render, assert one thing, stop. Cheap to try, and
+  the prompt now pushes this way generally, but it lowers the ceiling on what the starter
+  demonstrates.
+- **Ship backend first and say so.** `mvp.md`'s narrow slice was always backend, and the
+  reviewer interviews are about whether a package is sendable, not about role coverage.
+
+Recommended: the third for the MVP, the first for v2. Frontend is a known gap with a known
+cause, not a mystery.
+
 ### Out-of-scope temptations logged, not built
 
 - _(none yet)_
