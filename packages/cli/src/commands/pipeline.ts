@@ -11,6 +11,7 @@ import {
   type Ingest,
   type RunDir,
   type Roles,
+  type Surfaces,
 } from 'core';
 
 /** Options shared by every command that has to get a repo mapped before it can do its job. */
@@ -36,6 +37,8 @@ export interface MappedRepo {
   ingest: Ingest;
   components: Components;
   roles: Roles;
+  /** Present only when resuming a run that already selected surfaces. */
+  surfaces?: Surfaces;
 }
 
 /**
@@ -80,7 +83,15 @@ export async function mapRepo(repo: string, options: SharedOptions): Promise<Map
       (await roleMenu({ run: resumed.run, ingest: resumed.ingest, components })).roles;
     log('S3  reused');
 
-    return { run: resumed.run, ingest: resumed.ingest, components, roles };
+    if (resumed.surfaces !== undefined) log('S4  reused');
+
+    return {
+      run: resumed.run,
+      ingest: resumed.ingest,
+      components,
+      roles,
+      ...(resumed.surfaces === undefined ? {} : { surfaces: resumed.surfaces }),
+    };
   }
 
   const ingested = await ingest({

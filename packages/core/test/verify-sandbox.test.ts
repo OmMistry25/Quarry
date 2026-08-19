@@ -7,9 +7,11 @@ import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 import {
   INSTALL_TIMEOUT_MS,
   runCommand,
+  salientErrors,
   scrubbedEnv,
   tail,
   TEST_TIMEOUT_MS,
+  type CommandResult,
 } from '../src/verify/sandbox.js';
 
 let cwd: string;
@@ -173,5 +175,66 @@ describe('network configuration reaches the sandbox', () => {
     expect(env.HTTPS_PROXY).toBeDefined();
     expect(env.ANTHROPIC_API_KEY).toBeUndefined();
     expect(env.GITHUB_TOKEN).toBeUndefined();
+  });
+});
+
+describe('salientErrors', () => {
+  function result(output: string): CommandResult {
+    return {
+      command: 'npm test',
+      exitCode: 1,
+      ok: false,
+      stdout: output,
+      stderr: '',
+      timedOut: false,
+      durationMs: 1,
+    };
+  }
+
+  it('pulls the one line that matters out of TAP noise', () => {
+    // Regression: a repair failed because this line was buried in forty lines of TAP
+    // boilerplate, so the generator reproduced the same broken test invocation.
+    const tap = [
+      '# Subtest: test',
+      'not ok 1 - test',
+      '  ---',
+      '  duration_ms: 40.5',
+      "# Error: Cannot find module '/tmp/x/candidate/test'",
+      '#     at Function._resolveFilename (node:internal/modules/cjs/loader:1383:15)',
+      '  type: test',
+      '# fail 1',
+    ].join('\n');
+
+    expect(salientErrors(result(tap))).toContain(
+      "Error: Cannot find module '/tmp/x/candidate/test'",
+    );
+  });
+
+  it.each([
+    ['npm ERR! missing script: test', /npm ERR!/],
+    ['SyntaxError: Unexpected token', /SyntaxError/],
+    ['ModuleNotFoundError: No module named app', /ModuleNotFoundError/],
+    ['sh: 1: vitest: command not found', /command not found/],
+    ['error: Unknown option --foo', /Unknown option/],
+  ])('recognises %s', (line, pattern) => {
+    expect(salientErrors(result(line)).join('\n')).toMatch(pattern);
+  });
+
+  it('returns nothing when the output is only noise', () => {
+    expect(salientErrors(result('# pass 17\n# fail 0\nok 1 - thing'))).toEqual([]);
+  });
+
+  it('deduplicates repeats, which stack traces produce constantly', () => {
+    const repeated = Array.from({ length: 5 }, () => "Error: Cannot find module 'x'").join('\n');
+    expect(salientErrors(result(repeated))).toHaveLength(1);
+  });
+
+  it('caps the list so it cannot become the noise it exists to cut through', () => {
+    const many = Array.from({ length: 40 }, (_, i) => `Error: thing ${i} failed`).join('\n');
+    expect(salientErrors(result(many)).length).toBeLessThanOrEqual(8);
+  });
+
+  it('skips absurdly long lines, which are minified bundles rather than messages', () => {
+    expect(salientErrors(result(`Error: ${'x'.repeat(500)}`))).toEqual([]);
   });
 });

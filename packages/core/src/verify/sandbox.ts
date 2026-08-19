@@ -179,3 +179,42 @@ export function tail(result: CommandResult, lines = 40): string {
   const split = combined.split('\n');
   return split.slice(-lines).join('\n');
 }
+
+/**
+ * Lines that say what actually went wrong, pulled out of the noise around them.
+ *
+ * This exists because a repair once failed for want of it: a generated package used a test
+ * invocation Node rejects, and the feedback the generator received was forty lines of TAP
+ * boilerplate with the single line that mattered — `Cannot find module …/test` — buried in
+ * the middle. It regenerated the same mistake, at the cost of a full generation pass.
+ */
+const ERROR_SIGNATURES = [
+  /cannot find module/i,
+  /module_not_found/i,
+  /^\s*(Error|TypeError|SyntaxError|ReferenceError|AssertionError):/,
+  /^\s*error[: ]/i,
+  /ERR_[A-Z_]+/,
+  /command not found/i,
+  /is not recognized/i,
+  /No such file or directory/i,
+  /ModuleNotFoundError|ImportError/,
+  /npm ERR!/,
+  /Unknown (option|argument|command)/i,
+];
+
+export function salientErrors(result: CommandResult, max = 8): string[] {
+  const seen = new Set<string>();
+  const combined = `${result.stdout}\n${result.stderr}`;
+
+  for (const raw of combined.split('\n')) {
+    const line = raw.replace(/^[#>\s]*/, '').trim();
+    if (line === '' || line.length > 400) continue;
+    if (!ERROR_SIGNATURES.some((pattern) => pattern.test(line))) continue;
+    if (seen.has(line)) continue;
+
+    seen.add(line);
+    if (seen.size >= max) break;
+  }
+
+  return [...seen];
+}

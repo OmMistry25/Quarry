@@ -56,6 +56,18 @@ A small, complete, _runnable_ repository mirroring the surface described above.
 - **10–25 files.** Enough to feel like a real project, small enough to read in ten minutes.
 - **One command installs it. One command runs its tests.** Both documented in `README.md`,
   both stated in your JSON reply.
+- **Use the same test runner the source repo uses.** If it runs mocha, use mocha; jest, use
+  jest; vitest, pytest, the same. Its `package.json` or `pyproject.toml` is in the reference
+  material — read the actual script and mirror its form. Do not substitute a runner you
+  happen to prefer: matching the team's tooling is part of mirroring their conventions, and
+  an unfamiliar runner makes the starter feel less like their codebase.
+- **Your commands are run verbatim and they are the first thing checked.** You cannot execute
+  them yourself, so write only invocations you are certain of. Two specifics that have
+  actually broken runs:
+  - Prefer an explicit file glob to a bare directory. `node --test 'test/**/*.test.js'`
+    works; `node --test test/` is rejected outright on current Node versions.
+  - The test command must also work when a single test file path is appended to it, because
+    that is how the planted bug gets verified.
 - **No external services.** {{STUB_STRATEGY}}
 - It must include its own tests, written in the source repo's testing style, which **pass**
   against the starter code.
