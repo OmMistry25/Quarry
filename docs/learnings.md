@@ -775,6 +775,48 @@ means something — a junior task is meant to be a bug hunt — and quietly hand
 extension would misrepresent what they are looking at. `meta.json` records what was actually
 generated, not what was requested.
 
+### The `data` role was unreachable, and the cause was S2's granularity
+
+`--role data` had never produced anything, and mapping `getredash/redash` showed why. Redash
+runs three processes off one `pyproject.toml` — server, worker, scheduler — and S2 returned a
+single `backend-api` component covering `redash/**`. `redash/tasks/**` is real RQ worker code
+with its own compose services, but the data lane is defined by component *kind*, so a worker
+folded into a `backend-api` component is invisible. The role menu said:
+
+```
+data       none   no data pipeline or worker components.
+```
+
+S2 was following its prompt exactly: "its own manifest" is the strongest listed signal, and
+the standing instruction is to merge when unsure. Both are right for layers — `routes/`,
+`services/`, `models/` are not components. They are wrong for **processes**, which are
+deployed, scaled and broken independently.
+
+The prompt now carves out a process when the repo's own deployment description (compose
+services, a Procfile, k8s manifests, CI) runs one package as several long-lived ones, using
+the `!` negation the matcher already supported so parent and child paths stay disjoint.
+
+Re-mapping redash produced the worker component, citing the `dev_worker` and `dev_scheduler`
+compose commands as its evidence, and `data` moved `none` → `weak`. Cost was unchanged
+($0.265 → $0.289).
+
+This is the same root cause as the fullstack seam limitation logged in phase 6 — kind decided
+per package rather than per concern — so it is one blind spot, not two.
+
+**Still open:** redash's data lane is `weak`, because the carved-out worker is 945 loc and its
+tests live in the parent component's `tests/` tree. The phase-6 fix that counts tests from
+*neutral* components does not reach them: `tests/` belongs to `backend-api`, which is another
+role's lane. A worker whose tests sit outside its own paths will keep scoring weak.
+
+### The resume banner claimed a reuse that never happened
+
+Resuming the documenso frontend run as `--role backend` printed `S4  reused` and then
+`S4  selecting surfaces…` two lines later. `mapRepo` logged the reuse whenever `surfaces.json`
+existed, but surfaces belong to the role they were selected for, and only the caller knows
+which role it is about to ask for. Cheap to fix, and worth fixing quickly: the banner is how
+I read whether `--resume` actually saved an agent call, so a banner that overstates reuse
+makes every cost estimate downstream of it wrong.
+
 ### Out-of-scope temptations logged, not built
 
 - _(none yet)_
