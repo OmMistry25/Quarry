@@ -14,6 +14,7 @@ import {
 } from '../agent/referenceMaterial.js';
 import { runAgent, type AgentAttempt } from '../agent/runAgent.js';
 import { QuarryError } from '../errors.js';
+import { isVerifyTestFile, VERIFY_TEST_NAMING } from '../verify/verifyTestName.js';
 import type { Components } from '../schemas/components.js';
 import type { Ingest } from '../schemas/ingest.js';
 import { GenerationReply, Meta, META_SCHEMA_VERSION } from '../schemas/meta.js';
@@ -78,14 +79,6 @@ export async function generate(options: GenerateOptions): Promise<GenerateResult
   const task = taskForSeniority(options.seniority);
   const role = roleArchetype(options.role);
 
-  if (task.id !== 'bug-hunt') {
-    throw new QuarryError(
-      `The ${task.label} archetype is not implemented yet — Phase 4 ships backend x bug-hunt ` +
-        'only (docs/tasks-mvp.md). Use --seniority junior.',
-      { stage: 's5' },
-    );
-  }
-
   const startedAt = options.now ?? new Date();
 
   const reference = await buildReferenceMaterial(
@@ -114,6 +107,18 @@ export async function generate(options: GenerateOptions): Promise<GenerateResult
     BRIEF_STYLE: task.briefStyle,
     RUBRIC_DIMENSIONS: role.rubricDimensions.map((dimension) => `- ${dimension}`).join('\n'),
     ANSWER_KEY_REQUIREMENTS: task.answerKeyRequirements,
+    INTERVIEWER_EXTRAS: task.interviewerExtras.join('\n'),
+    TASK_SPECIFIC_SECTIONS:
+      (task.plantingGuidance === undefined ? '' : `${task.plantingGuidance}\n\n`) +
+      task.promptSections +
+      (seniority.requiresDesignNote
+        ? '\n### candidate/DESIGN.md\n\n' +
+          'The candidate is also asked for a short design note. Add a `DESIGN.md` to ' +
+          '`candidate/` posing the question — how this change holds up at 10x scale, or under ' +
+          'multi-tenancy — grounded in *this* system rather than in the abstract. Name the ' +
+          'specific table, endpoint or job that would strain first. Ask for half a page, not ' +
+          'an essay, and say so.\n'
+        : ''),
     REFERENCE_MATERIAL: reference.text,
   });
 
@@ -141,11 +146,20 @@ export async function generate(options: GenerateOptions): Promise<GenerateResult
     // Trust the filesystem, not the reply: an agent that says it wrote a file and did not is
     // a failure worth catching here rather than in S6.
     const onDisk = await listFiles(targetDir);
-    await assertPackageShape(onDisk, task.requiresBugDemonstration);
 
+    // Move the output in *before* checking its shape. A rejected package is the most
+    // expensive thing to reproduce — six to thirteen minutes of generation — so the evidence
+    // has to survive the rejection rather than being deleted with the temp directory.
     const packageDir = path.join(options.run.dir, 'package');
     await fs.rm(packageDir, { recursive: true, force: true });
     await fs.cp(targetDir, packageDir, { recursive: true });
+
+    await assertPackageShape(onDisk, {
+      requiresVerifyTest: task.requiresBugDemonstration,
+      requiresDesignNote: seniority.requiresDesignNote,
+      packageDir,
+      claimed: result.data.files,
+    });
 
     const meta = Meta.parse({
       schemaVersion: META_SCHEMA_VERSION,
@@ -188,6 +202,10 @@ export async function generate(options: GenerateOptions): Promise<GenerateResult
   }
 }
 
+function basename(filePath: string): string {
+  return filePath.slice(filePath.lastIndexOf('/') + 1);
+}
+
 function taskBrief(
   surface: Surface,
   roleLabel: string,
@@ -201,7 +219,11 @@ function taskBrief(
       : '\n\n## A previous attempt at this package failed verification\n\n' +
         'Quarry installed the last attempt, ran its tests, and checked it. These are the ' +
         'problems it found. Write the package again from scratch, avoiding all of them:\n\n' +
-        priorFailures.map((failure) => `- ${failure}`).join('\n\n');
+        priorFailures.map((failure) => `- ${failure}`).join('\n\n') +
+        '\n\nEvery other check still applies. A previous attempt has already failed by fixing ' +
+        'the reported problem and, in the process, copying a block of the reference material ' +
+        'verbatim — trading one failure for another. Fix what is listed **and** keep ' +
+        'everything above, the synthesis rule first among them.';
 
   return (
     `A **${taskLabel}** for a **${roleLabel}** candidate, built around this surface from the ` +
@@ -243,7 +265,15 @@ async function listFiles(root: string): Promise<string[]> {
  * Structural checks S6 should never have to discover. These are cheap and catch the failure
  * modes that make a package unusable rather than merely imperfect.
  */
-async function assertPackageShape(files: string[], requiresVerifyTest: boolean): Promise<void> {
+async function assertPackageShape(
+  files: string[],
+  wants: {
+    requiresVerifyTest: boolean;
+    requiresDesignNote: boolean;
+    packageDir: string;
+    claimed: readonly string[];
+  },
+): Promise<void> {
   const problems: string[] = [];
 
   const has = (predicate: (file: string) => boolean): boolean => files.some(predicate);
@@ -254,18 +284,36 @@ async function assertPackageShape(files: string[], requiresVerifyTest: boolean):
   if (!has((file) => file === 'interviewer/answer-key.md')) {
     problems.push('interviewer/answer-key.md');
   }
-  if (requiresVerifyTest && !has((file) => /^interviewer\/verify\.test\./.test(file))) {
-    problems.push('interviewer/verify.test.*');
+  if (
+    wants.requiresVerifyTest &&
+    !has((file) => file.startsWith('interviewer/') && isVerifyTestFile(basename(file)))
+  ) {
+    problems.push(`interviewer/<verification test> (${VERIFY_TEST_NAMING})`);
   }
   // Without the fix as code, S6 cannot demonstrate the planted bug at all.
-  if (requiresVerifyTest && !has((file) => file.startsWith('interviewer/fix/'))) {
+  if (wants.requiresVerifyTest && !has((file) => file.startsWith('interviewer/fix/'))) {
     problems.push('interviewer/fix/<corrected files>');
+  }
+  if (wants.requiresDesignNote && !has((file) => file === 'candidate/DESIGN.md')) {
+    problems.push('candidate/DESIGN.md');
   }
 
   if (problems.length > 0) {
+    // When the reply and the filesystem disagree, both sides are worth printing: an agent
+    // that claims files it never wrote is a different problem from one that wrote the wrong
+    // ones, and the message should say which happened.
+    const disagreement =
+      files.length === 0 && wants.claimed.length > 0
+        ? `\n\nThe agent reported writing ${wants.claimed.length} file(s) that are not on ` +
+          `disk:\n${wants.claimed.map((file) => `  ${file}`).join('\n')}\n` +
+          'Nothing reached the filesystem. See logs/agent.log for its full reply.'
+        : '';
+
     throw new QuarryError(
-      `The generator did not write: ${problems.join(', ')}. Wrote ${files.length} file(s): ` +
-        `${files.slice(0, 20).join(', ')}${files.length > 20 ? ' …' : ''}`,
+      `The generator did not write: ${problems.join(', ')}.\n` +
+        `It wrote ${files.length} file(s); inspect them at ${wants.packageDir}\n` +
+        files.map((file) => `  ${file}`).join('\n') +
+        disagreement,
       { stage: 's5' },
     );
   }
@@ -279,11 +327,21 @@ async function assertPackageShape(files: string[], requiresVerifyTest: boolean):
   }
 
   // The verification test must never reach the candidate.
-  const leaked = candidateFiles.filter((file) => /verify\.test\./.test(file));
+  const leaked = candidateFiles.filter((file) => isVerifyTestFile(basename(file)));
   if (leaked.length > 0) {
     throw new QuarryError(
       `The verification test leaked into candidate/: ${leaked.join(', ')}. It gives the ` +
         'answer away and must stay in interviewer/.',
+      { stage: 's5' },
+    );
+  }
+
+  // An extension has nothing planted, so a fix directory means the generator built the wrong
+  // kind of task — and S6 would have no way to check it.
+  if (!wants.requiresVerifyTest && has((file) => file.startsWith('interviewer/fix/'))) {
+    throw new QuarryError(
+      'This is an extension, but the generator wrote interviewer/fix/ — that belongs to a ' +
+        'bug hunt. The starter must be correct as shipped.',
       { stage: 's5' },
     );
   }

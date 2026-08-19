@@ -2,6 +2,8 @@ import fs from 'node:fs/promises';
 import path from 'node:path';
 
 import { runCommand, TEST_TIMEOUT_MS, type CommandResult } from './sandbox.js';
+import { isTestPath } from '../components/match.js';
+import { isVerifyTestFile } from './verifyTestName.js';
 
 /**
  * Bug demonstrability (SPEC S6): the planted bug must be *provable*, not merely claimed.
@@ -39,18 +41,52 @@ async function findVerifyTest(packageDir: string): Promise<string | undefined> {
     .readdir(path.join(packageDir, 'interviewer'), { withFileTypes: true })
     .catch(() => []);
 
-  return entries.find((entry) => entry.isFile() && /^verify\.test\./.test(entry.name))?.name;
+  return entries.find((entry) => entry.isFile() && isVerifyTestFile(entry.name))?.name;
 }
 
 /**
- * Where to drop the verification test inside the candidate copy. It imports as though it sits
- * in the project's own test directory, so that is where it goes.
+ * Where to drop the verification test inside the candidate copy.
+ *
+ * It is written to import as though it sits alongside the project's own tests, so it has to
+ * land exactly where those tests are — found by locating them, not by guessing from a list of
+ * conventional directory names. Guessing failed on a real package whose tests live in
+ * `src/test/`: `src` matched first, the file landed one level too high, and every relative
+ * import in it resolved outside the project.
  */
 async function testDirectory(candidateDir: string): Promise<string> {
-  for (const name of ['test', 'tests', '__tests__', 'src']) {
+  const counts = new Map<string, number>();
+
+  const walk = async (dir: string, rel: string): Promise<void> => {
+    for (const entry of await fs.readdir(dir, { withFileTypes: true }).catch(() => [])) {
+      if (entry.name === 'node_modules' || entry.name.startsWith('.')) continue;
+
+      const relPath = rel === '' ? entry.name : `${rel}/${entry.name}`;
+      if (entry.isDirectory()) {
+        await walk(path.join(dir, entry.name), relPath);
+      } else if (entry.isFile() && isTestPath(relPath)) {
+        const parent = rel === '' ? '.' : rel;
+        counts.set(parent, (counts.get(parent) ?? 0) + 1);
+      }
+    }
+  };
+
+  await walk(candidateDir, '');
+
+  // The directory holding the most tests is the project's test directory. Ties break toward
+  // the shallower path, which is the conventional one.
+  const ranked = [...counts.entries()].sort(
+    (a, b) => b[1] - a[1] || a[0].split('/').length - b[0].split('/').length,
+  );
+  const found = ranked[0]?.[0];
+  if (found !== undefined) return found;
+
+  // No test files to learn from — a package with a bespoke runner, or one whose tests sit
+  // beside the code without a recognisable name. Fall back to conventional directories.
+  for (const name of ['test', 'tests', '__tests__', 'spec', 'src']) {
     const stat = await fs.stat(path.join(candidateDir, name)).catch(() => undefined);
     if (stat?.isDirectory()) return name;
   }
+
   return '.';
 }
 

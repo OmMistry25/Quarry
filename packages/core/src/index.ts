@@ -36,6 +36,7 @@ export { runAgent, type AgentAttempt, type AgentResult } from './agent/runAgent.
 export type { AgentTransport, AgentInvocation, AgentReply } from './agent/claude.js';
 export { DEFAULT_CONTEXT_BUDGET, type ContextBudget } from './agent/context.js';
 export { createRunDir, type RunDir } from './run.js';
+export { loadRun, findRun, listRuns, latestRun, type ResumedRun } from './resume.js';
 
 export { roleMenu, scoreRole, computeScore, assertRoleSupported } from './stages/s3-roles.js';
 export { Roles, ROLES_SCHEMA_VERSION, type RoleCard, type RoleRating } from './schemas/roles.js';

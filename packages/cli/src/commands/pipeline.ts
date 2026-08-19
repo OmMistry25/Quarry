@@ -4,11 +4,14 @@ import { InvalidArgumentError } from 'commander';
 import {
   cartography,
   ingest,
+  latestRun,
+  loadRun,
   roleMenu,
   type Components,
   type Ingest,
   type RunDir,
   type Roles,
+  type Surfaces,
 } from 'core';
 
 /** Options shared by every command that has to get a repo mapped before it can do its job. */
@@ -17,6 +20,8 @@ export interface SharedOptions {
   maxSizeMb: number;
   model?: string;
   json: boolean;
+  /** Run id to reuse, or "latest". Stages whose artifacts already exist are skipped. */
+  resume?: string;
 }
 
 export function parsePositiveNumber(value: string): number {
@@ -32,6 +37,8 @@ export interface MappedRepo {
   ingest: Ingest;
   components: Components;
   roles: Roles;
+  /** Present only when resuming a run that already selected surfaces. */
+  surfaces?: Surfaces;
 }
 
 /**
@@ -43,9 +50,53 @@ export async function mapRepo(repo: string, options: SharedOptions): Promise<Map
     if (!options.json) console.error(message);
   };
 
+  const workRoot = path.resolve(options.workDir);
+
+  if (options.resume !== undefined) {
+    const runId =
+      options.resume === 'latest' ? ((await latestRun(workRoot)) ?? 'latest') : options.resume;
+    const resumed = await loadRun(workRoot, runId);
+
+    if (resumed.ingest === undefined) {
+      throw new Error(`Run "${runId}" has no ingest.json; it cannot be resumed.`);
+    }
+
+    log(`--  resuming ${runId}`);
+    log(`S1  reused (${resumed.ingest.repo.fileCount} files)`);
+
+    const components =
+      resumed.components ??
+      (log('S2  mapping components…'),
+      (
+        await cartography({
+          run: resumed.run,
+          ingest: resumed.ingest,
+          ...(options.model === undefined ? {} : { model: options.model }),
+        })
+      ).components);
+    if (resumed.components !== undefined) {
+      log(`S2  reused (${components.components.length} components)`);
+    }
+
+    const roles =
+      resumed.roles ??
+      (await roleMenu({ run: resumed.run, ingest: resumed.ingest, components })).roles;
+    log('S3  reused');
+
+    if (resumed.surfaces !== undefined) log('S4  reused');
+
+    return {
+      run: resumed.run,
+      ingest: resumed.ingest,
+      components,
+      roles,
+      ...(resumed.surfaces === undefined ? {} : { surfaces: resumed.surfaces }),
+    };
+  }
+
   const ingested = await ingest({
     ref: repo,
-    workRoot: path.resolve(options.workDir),
+    workRoot,
     maxTotalBytes: options.maxSizeMb * 1_000_000,
     githubToken: process.env.GITHUB_TOKEN,
   });

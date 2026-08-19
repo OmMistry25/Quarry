@@ -12,6 +12,7 @@ import { checkOverlap, type OverlapResult } from '../verify/overlap.js';
 import {
   INSTALL_TIMEOUT_MS,
   runCommand,
+  salientErrors,
   tail,
   TEST_TIMEOUT_MS,
   type CommandResult,
@@ -91,11 +92,7 @@ export async function verify(options: VerifyOptions): Promise<VerifyReport> {
       ok: install.ok,
       detail: install.ok ? `${(install.durationMs / 1000).toFixed(0)}s` : tail(install, 10),
     });
-    if (!install.ok) {
-      failures.push(
-        `\`${install.command}\` failed${install.timedOut ? ' (timed out)' : ''}:\n${tail(install)}`,
-      );
-    }
+    if (!install.ok) failures.push(describeFailure(install));
 
     // Without a successful install nothing downstream can run; report honestly rather than
     // producing misleading "tests failed" noise.
@@ -110,11 +107,7 @@ export async function verify(options: VerifyOptions): Promise<VerifyReport> {
       ok: tests.ok,
       detail: tests.ok ? `${(tests.durationMs / 1000).toFixed(0)}s` : tail(tests, 10),
     });
-    if (!tests.ok) {
-      failures.push(
-        `\`${tests.command}\` failed${tests.timedOut ? ' (timed out)' : ''}:\n${tail(tests)}`,
-      );
-    }
+    if (!tests.ok) failures.push(describeFailure(tests));
 
     const wantsBugDemo = options.requireBugDemonstration ?? options.meta.task === 'bug-hunt';
     const bugDemo =
@@ -193,6 +186,21 @@ export async function verify(options: VerifyOptions): Promise<VerifyReport> {
   } finally {
     await fs.rm(sandboxDir, { recursive: true, force: true });
   }
+}
+
+/**
+ * Lead with what went wrong, then the raw tail. The generator reads this to repair a package,
+ * and a wall of test-runner boilerplate buries the one line that would let it.
+ */
+function describeFailure(result: CommandResult): string {
+  const errors = salientErrors(result);
+  const headline = errors.length > 0 ? `\n  ${errors.join('\n  ')}` : '';
+
+  return (
+    `\`${result.command}\` failed${result.timedOut ? ' (timed out)' : ''}.` +
+    (headline === '' ? '' : `\n\nThe errors that matter:${headline}`) +
+    `\n\nFull output (last lines):\n${tail(result)}`
+  );
 }
 
 function skipped(command: string, reason: string): CommandResult {

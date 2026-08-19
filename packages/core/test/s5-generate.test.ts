@@ -263,16 +263,129 @@ describe('S5 package shape checks', () => {
   });
 });
 
-describe('S5 scope gate', () => {
-  it.each(['mid', 'senior'] as const)(
-    'refuses %s until the extension archetype ships',
-    async (seniority) => {
-      const error = await run5(writingTransport(VALID_PACKAGE), { seniority }).catch(
-        (caught: unknown) => caught,
-      );
+/** An extension ships no planted bug, so no verify test and no fix directory. */
+const EXTENSION_PACKAGE: Record<string, string> = Object.fromEntries(
+  Object.entries(VALID_PACKAGE).filter(
+    ([file]) =>
+      !file.startsWith('interviewer/verify.test.') && !file.startsWith('interviewer/fix/'),
+  ),
+);
 
-      expect(error).toBeInstanceOf(QuarryError);
-      expect((error as QuarryError).message).toMatch(/not implemented yet/);
-    },
-  );
+describe('S5 task archetypes', () => {
+  it('junior produces a bug hunt', async () => {
+    const result = await run5(writingTransport(VALID_PACKAGE), { seniority: 'junior' });
+    expect(result.meta.task).toBe('bug-hunt');
+  });
+
+  it('mid produces an extension with no planted-bug apparatus', async () => {
+    const result = await run5(writingTransport(EXTENSION_PACKAGE), { seniority: 'mid' });
+
+    expect(result.meta.task).toBe('extension');
+    expect(result.files.some((file) => file.startsWith('interviewer/fix/'))).toBe(false);
+  });
+
+  it('tells the generator an extension has no planted bug', async () => {
+    const transport = writingTransport(EXTENSION_PACKAGE);
+    await run5(transport, { seniority: 'mid' });
+
+    const prompt = transport.calls[0]?.prompt ?? '';
+    expect(prompt).toMatch(/There is no planted bug/);
+    expect(prompt).toMatch(/ambiguity/);
+    expect(prompt).not.toMatch(/verify\.test/);
+  });
+
+  it('rejects an extension that shipped a fix directory anyway', async () => {
+    // A fix directory means the generator built a bug hunt, and S6 has no way to check it.
+    const error = await run5(writingTransport(VALID_PACKAGE), { seniority: 'mid' }).catch(
+      (caught: unknown) => caught,
+    );
+
+    expect(error).toBeInstanceOf(QuarryError);
+    expect((error as QuarryError).message).toMatch(/belongs to a bug hunt/);
+  });
+
+  it('senior requires a design note', async () => {
+    const error = await run5(writingTransport(EXTENSION_PACKAGE), { seniority: 'senior' }).catch(
+      (caught: unknown) => caught,
+    );
+
+    expect(error).toBeInstanceOf(QuarryError);
+    expect((error as QuarryError).message).toMatch(/candidate\/DESIGN\.md/);
+  });
+
+  it('senior succeeds once the design note is there, and asks about this system', async () => {
+    const withDesign = { ...EXTENSION_PACKAGE, 'candidate/DESIGN.md': '# Design\n' };
+    const transport = writingTransport(withDesign);
+
+    const result = await run5(transport, { seniority: 'senior' });
+
+    expect(result.meta.seniority).toBe('senior');
+    expect(transport.calls[0]?.prompt).toMatch(/10x scale/);
+    expect(transport.calls[0]?.prompt).toMatch(/grounded in \*this\* system/);
+  });
+
+  it('does not ask junior for a design note', async () => {
+    const transport = writingTransport(VALID_PACKAGE);
+    await run5(transport, { seniority: 'junior' });
+
+    expect(transport.calls[0]?.prompt).not.toMatch(/DESIGN\.md/);
+  });
+});
+
+describe('repair prompts', () => {
+  it('restates the other invariants, not just the reported failure', async () => {
+    // A repair against documenso fixed the reported problem and copied a block of the
+    // reference verbatim doing it — trading one failure for another. Attempt 1 had been
+    // overlap-clean.
+    const transport = writingTransport(VALID_PACKAGE);
+
+    await run5(transport, { priorFailures: ['`npm test` failed: something broke'] });
+
+    const prompt = transport.calls[0]?.prompt ?? '';
+    expect(prompt).toMatch(/previous attempt at this package failed verification/);
+    expect(prompt).toMatch(/something broke/);
+    expect(prompt).toMatch(/Every other check still applies/);
+    expect(prompt).toMatch(/synthesis rule first among them/);
+  });
+
+  it('says nothing about repairs on a first attempt', async () => {
+    const transport = writingTransport(VALID_PACKAGE);
+    await run5(transport);
+
+    expect(transport.calls[0]?.prompt).not.toMatch(/previous attempt/);
+  });
+});
+
+describe('when the reply and the filesystem disagree', () => {
+  it('says the agent claimed files it never wrote', async () => {
+    // A documenso run returned a schema-valid manifest and wrote nothing at all. Without
+    // both sides printed, "the generator did not write X" reads as though it wrote the wrong
+    // files rather than none — a different problem with a different cause.
+    const transport = async (): Promise<AgentReply> => ({
+      text: JSON.stringify({
+        files: ['candidate/README.md', 'candidate/BRIEF.md'],
+        setupCommand: 'npm install',
+        testCommand: 'npm test',
+        plantedBugFile: 'candidate/src/a.ts',
+      }),
+      costUsd: 1,
+    });
+
+    const error = await run5(transport).catch((caught: unknown) => caught);
+
+    expect(error).toBeInstanceOf(QuarryError);
+    const message = (error as QuarryError).message;
+    expect(message).toMatch(/reported writing 2 file\(s\) that are not on disk/);
+    expect(message).toMatch(/Nothing reached the filesystem/);
+    expect(message).toMatch(/agent\.log/);
+  });
+
+  it("records the agent's reply even on a successful attempt", async () => {
+    const seen: { reply?: string }[] = [];
+    await run5(writingTransport(VALID_PACKAGE), {
+      onAttempt: (attempt) => seen.push(attempt),
+    });
+
+    expect(seen[0]?.reply).toMatch(/setupCommand/);
+  });
 });

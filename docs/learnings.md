@@ -537,6 +537,206 @@ S5 invalidated a Phase 4 test fixture, and the full suite was not re-run until l
 fix, but the lesson is to run the whole suite after changing a stage's contract, not only the
 tests for the stage being edited.
 
+---
+
+## Phase 6 — End-to-end hardening
+
+### Correction to the dogfood assumption in context.md
+
+`context.md` and `goals.md` treat the dogfood repos (`gtm-os-console`, `signal-engine`) as the
+place the quality question gets answered — "would a reviewer recognise this as our code?".
+Om has since pointed out that **those repos were written by Claude Code, not by hand.**
+
+That materially weakens them as a quality signal. Mirroring recently-generated, conventional,
+internally-consistent code is the *easy* case. The hard case — and the one every real
+customer has — is a codebase written by several people over years: idiosyncratic conventions,
+a wrapper everyone works around, naming that only makes sense with the history. Whether
+Quarry can imitate *that* convincingly is the question that decides the product, and the
+dogfood repos cannot ask it.
+
+Consequences, applied to this phase:
+
+- **Hardening prioritises mature, human-written OSS repos with a strong house style** over
+  merely finding a TypeScript repo of the right size. A repo old and opinionated enough that
+  someone who knows it would immediately spot a fake is worth more than three modern ones.
+- **The dogfood runs stay, but prove something narrower**: that the pipeline survives a repo
+  the author can inspect, and that `mvp.md`'s demo storyline (which opens by pasting the
+  `signal-engine` URL) actually works. They are not the quality evidence.
+- **`goals.md` metric 1 — five reviewers judging against codebases they know — was always the
+  load-bearing measurement, and is now the only one that reaches the real question.** Worth
+  weighting the reviewer interviews accordingly, and worth trying to get one run against a
+  reviewer's own production repo, even locally on their machine.
+- The "no IP leaves your org" pitch also lands differently on an agent-written repo, where
+  there is little proprietary code to protect. Fine — Om is not the customer — but it means a
+  demo built on the dogfood repos leaves the pitch's strongest argument unexercised.
+
+### Limitation: the fullstack seam can live inside one component
+
+`formbricks/formbricks` scores Backend STRONG and Frontend STRONG but Fullstack `none`, and
+that is the scorer working as written rather than a bug: it has no `backend-api` component at
+all. Its API routes live *inside* the Next.js `web` app, so S2 correctly maps one
+`frontend-app` plus shared libraries and workers, and the fullstack archetype — which
+requires a `frontend-app` and a `backend-api` to slice across — finds no seam.
+
+A reviewer would reasonably call formbricks a fullstack repo. SPEC defines fullstack as "one
+vertical slice across the seam", and in a Next.js application that seam is real but
+*intra-component*: server actions and route handlers on one side, client components on the
+other. Detecting it means reasoning about the seam inside a component rather than between
+two, which the current kind-based rule cannot do.
+
+Not fixed. It costs nothing on repos with a separate API (`documenso/documenso` scores
+Fullstack STRONG), and the alternative — inferring intra-component seams — is a real piece of
+design rather than a tweak. Worth revisiting if reviewers ask for fullstack tasks on
+Next-style repos.
+
+### Invariant 1 fired on real output — the most important result so far
+
+Generating a **frontend** package from `documenso/documenso`, the overlap check rejected the
+package for reproducing source code verbatim:
+
+```
+src/components/widget-preferences-form.tsx:127 <- apps/remix/.../branding-preferences-form.tsx:187
+
+  const handleFormSubmit = form.handleSubmit(async (data) => {
+    try {
+      await onFormSubmit(data);
+    } catch {
+      return;
+    }
+    form.reset(form.getValues());
+```
+
+That is genuine copying rather than shared idiom: the `onFormSubmit` name, the bare
+`catch { return; }`, and `form.reset(form.getValues())` in that exact sequence. A different
+author writes it differently.
+
+This matters more than any other single result in the project. The entire pitch — "your
+codebase, zero IP exposure" — rests on that check, and until now it had only ever been proved
+against a synthetic fixture. It caught a real violation and refused to package. It is not
+theoretical, and the generator does sometimes copy.
+
+Two things follow.
+
+**Framework boilerplate is where copying happens.** Not the interesting logic, which gets
+rewritten naturally, but the stereotyped glue: submit handlers, router setup, error
+middleware, provider wrappers, test scaffolding. Idiomatic code converges, so reaching for the
+obvious shape reproduces the reference exactly. The prompt now names this specifically, shows
+the real violation as an example, and asks for a deliberately different choice in exactly
+those places. Per CLAUDE.md invariant 1, the fix goes in generation, not the check.
+
+**The repair loop degraded synthesis while chasing the reported failure.** Attempt 1 was
+overlap-clean; the copying appeared in attempt 2, which was fixing a bug-demonstrability
+problem. Under pressure to fix what it was told about, the generator leaned harder on the
+reference material. The repair block now restates that every other check still applies and
+names the synthesis rule first — fix what is listed *and* keep everything else.
+
+### Bug-hunt is a structurally poor fit for the frontend role
+
+Three frontend generations against `documenso/documenso` were rejected for the same reason:
+the starter's own suite catches the planted bug, so the candidate would find it by running
+the tests once. The third failed with **20 of its own tests failing**, after the planting
+guidance had been added and had visibly worked on backend repos.
+
+This is not a prompt problem. It is a difference in how the two kinds of test suite cover
+behaviour:
+
+- **Backend tests assert input/output pairs.** express's suite checked specific byte lengths
+  and content types, which leaves gaps between assertions — the exact-zero case, the
+  multi-byte body, the boundary nobody wrote a test for. A realistic bug fits in a gap.
+- **Component tests assert observable UI state, broadly.** "hides the sticky bar until a
+  field is edited", "disables the fields while branding is off", "offers an inherit option
+  only for a scope that can inherit". A React form's suite covers rendered state so densely
+  that almost any component bug changes something a test already asserts.
+
+The generator is not being careless; there is very little room to plant in.
+
+The design already carries the remedy: seniority is a scope knob, and `mid` selects the
+**extension** archetype, which plants nothing. Frontend work is better assessed by asking a
+candidate to build something than by hiding a defect for them to find — which matches how
+frontend interviews usually run anyway.
+
+Worth putting to reviewers directly, since it is a product question rather than a bug: should
+`--role frontend --seniority junior` fall back to an extension, or refuse with an explanation?
+Falling back silently would be the wrong kind of helpful — the seniority knob means something.
+
+### The < 10 minute target is missed on real repos, and not by a little
+
+Measured from the two verified packages, S5 generation **alone**:
+
+| Repo | S5 generation | Cost | Attempts |
+|---|---|---|---|
+| `expressjs/express` | **874 s (14.6 min)** | $4.61 | 1 |
+| `psf/requests` | **863 s (14.4 min)** | $5.39 | 1 |
+
+SPEC acceptance 1 and `goals.md` metric 3 both require **repo URL → downloadable package in
+under 10 minutes**, and `mvp.md`'s demo storyline promises "download zip in ~5–8 min". One
+stage is already 45% over the budget for the whole pipeline, before ingest, cartography,
+surface selection or verification. A run needing its repair loop took **31 minutes**.
+
+The fixture hid this completely: it generates in ~6 minutes because it is 16 files.
+
+This is not a bug and there is no obvious fix that is free. The time is spent writing 13–25
+files of real code, so it scales with *output*, not with the reference material — trimming
+input will not move it much. The levers, all of them trade-offs:
+
+- **A faster model for S5.** `--model` is already plumbed through. Untested for quality, and
+  S5 is the stage where quality matters most.
+- **A smaller candidate repo.** SPEC says 10–25 files; the low end would be quicker and
+  thinner.
+- **Stream progress and let the wait be visible.** Phase 8's UI streams stage events, which
+  changes how ten minutes *feels* without changing what it costs. The demo is a screen-share,
+  not a race.
+- **Change the target.** The number in the docs was written before anything had been
+  measured against a real repo.
+
+Worth deciding with the reviewer interviews in mind: a hiring manager waiting for a take-home
+they will spend an hour reviewing may not care whether it took 8 minutes or 15. The 10-minute
+figure was a guess, and it now has data against it. Not changed unilaterally — SPEC wins on
+behaviour, and this is a stated acceptance criterion.
+
+### Frontend does not work yet, and the reason is testable assertions about the DOM
+
+**Result: backend works on two languages; frontend produces no verified package.**
+
+| Repo | Role | Archetype | Result |
+|---|---|---|---|
+| `expressjs/express` | backend | bug-hunt | ✅ verified, 21 kB |
+| `psf/requests` | backend | bug-hunt | ✅ verified, 19.8 kB |
+| `documenso/documenso` | frontend | bug-hunt | ❌ ×3 — shipped suite catches the bug |
+| `documenso/documenso` | frontend | extension | ❌ ×2 — starter fails its own tests |
+
+Five generation attempts, both archetypes, every one rejected by S6 for the same underlying
+reason: **the generated React tests do not pass against the generated React components.**
+Failures are always testing-library assertions — an element expected absent that is present,
+`getByTestId` matching several nodes, a hint that renders under a condition the component
+does not implement.
+
+The generator has no Bash tool by design (Phase 4), so it cannot run what it writes. For
+backend code that is survivable: an assertion about a returned value or a status code is
+easy to get right by reading. An assertion about rendered DOM is not — it depends on how
+the whole tree renders, which is exactly the thing that needs executing to know.
+
+So the difficulty is not the frontend *archetype* — its stub strategy produced a working
+Vite + React + vitest + testing-library package that installs and runs, and the extension
+variant was structurally perfect on its first live run (bug demonstrability correctly skipped,
+`interviewer/` correctly holding only the rubric and answer key, overlap clean). The
+difficulty is writing DOM assertions blind.
+
+Options, none free, none taken here:
+
+- **Let S5 run the tests.** Add Bash to the generation pass so it can iterate until its own
+  suite passes. This is the fix that addresses the cause. It contradicts the Phase 4 decision
+  to deny S5 a shell — which was made to keep generation off the network and out of package
+  installs — and it would make the slowest stage slower still.
+- **Ask for far simpler frontend tests.** Render, assert one thing, stop. Cheap to try, and
+  the prompt now pushes this way generally, but it lowers the ceiling on what the starter
+  demonstrates.
+- **Ship backend first and say so.** `mvp.md`'s narrow slice was always backend, and the
+  reviewer interviews are about whether a package is sendable, not about role coverage.
+
+Recommended: the third for the MVP, the first for v2. Frontend is a known gap with a known
+cause, not a mystery.
+
 ### Out-of-scope temptations logged, not built
 
 - _(none yet)_

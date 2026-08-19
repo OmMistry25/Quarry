@@ -37,6 +37,10 @@ export function generateCommand(): Command {
     .option('--auto', 'pick the top-scored surface without asking', false)
     .option('--surface <id>', 'generate from a specific surface id')
     .option('--work-dir <dir>', 'root for run directories', 'work')
+    .option(
+      '--resume <runId>',
+      'reuse an existing run\'s artifacts instead of starting over ("latest" for the most recent)',
+    )
     .option('--max-size-mb <mb>', 'repository size cap', parsePositiveNumber, 200)
     .option('--model <model>', 'model for the agent calls (defaults to the CLI default)')
     .option('--no-repair', 'fail on the first bad package instead of regenerating once')
@@ -54,15 +58,27 @@ export function generateCommand(): Command {
 
       assertRoleSupported(mapped.roles, options.role);
 
-      if (!options.json) console.error('S4  selecting surfaces…');
-      const selected = await surfaceSelection({
-        run: mapped.run,
-        ingest: mapped.ingest,
-        components: mapped.components,
-        role: options.role,
-        ...(options.model === undefined ? {} : { model: options.model }),
-        onAttempt: (attempt) => reportAttempt(options.json, attempt),
-      });
+      // A resumed run that already picked surfaces for this role reuses them; S4 is an agent
+      // call, and re-paying for it while iterating on generation is the whole thing --resume
+      // exists to avoid.
+      const reusable =
+        mapped.surfaces !== undefined && mapped.surfaces.role === options.role
+          ? mapped.surfaces
+          : undefined;
+
+      if (!options.json && reusable === undefined) console.error('S4  selecting surfaces…');
+
+      const selected =
+        reusable !== undefined
+          ? { surfaces: reusable }
+          : await surfaceSelection({
+              run: mapped.run,
+              ingest: mapped.ingest,
+              components: mapped.components,
+              role: options.role,
+              ...(options.model === undefined ? {} : { model: options.model }),
+              onAttempt: (attempt) => reportAttempt(options.json, attempt),
+            });
 
       const surface = pickSurface(
         selected.surfaces,

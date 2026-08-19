@@ -17,7 +17,8 @@ export async function appendAgentLog(run: RunDir, attempt: AgentAttempt): Promis
   await fs.mkdir(logDir, { recursive: true });
 
   const detail = attempt.detail === undefined ? '' : `\n${indent(attempt.detail)}`;
-  const line = `[${attempt.stage}] attempt ${attempt.attempt}: ${attempt.outcome}${detail}\n`;
+  const reply = attempt.reply === undefined ? '' : `\n  reply:\n${indent(attempt.reply)}`;
+  const line = `[${attempt.stage}] attempt ${attempt.attempt}: ${attempt.outcome}${detail}${reply}\n`;
 
   await fs.appendFile(path.join(logDir, 'agent.log'), line, 'utf8');
 }

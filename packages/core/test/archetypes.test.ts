@@ -83,3 +83,25 @@ describe('task and seniority archetypes', () => {
     expect(Object.keys(SENIORITY_ARCHETYPES).sort()).toEqual([...SENIORITY_IDS].sort());
   });
 });
+
+describe('bug-hunt planting guidance', () => {
+  it('tells the generator to plant the bug last, after reading its own tests', () => {
+    // Two of three express generations planted a bug their own shipped suite caught, which
+    // S6 correctly rejects as "not a bug hunt". Stating the rule was not enough; the
+    // generator needs the order of operations and a check it can perform.
+    const guidance = TASK_ARCHETYPES['bug-hunt'].plantingGuidance ?? '';
+
+    expect(guidance).toMatch(/Do this \*\*last\*\*/);
+    expect(guidance).toMatch(/Re-read your own test files/);
+    expect(guidance).toMatch(/none of those assertions cover/);
+  });
+
+  it('warns against thinning the test suite to make room for the bug', () => {
+    const guidance = TASK_ARCHETYPES['bug-hunt'].plantingGuidance ?? '';
+    expect(guidance).toMatch(/does not mean writing a thin suite/);
+  });
+
+  it('gives the extension no planting guidance, since nothing is planted', () => {
+    expect(TASK_ARCHETYPES.extension.plantingGuidance).toBeUndefined();
+  });
+});

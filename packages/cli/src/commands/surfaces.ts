@@ -28,6 +28,10 @@ export function surfacesCommand(): Command {
     .requiredOption('--role <role>', `one of: ${ROLE_IDS.join(', ')}`, parseRole)
     .option('--auto', 'also print which surface --auto would choose', false)
     .option('--work-dir <dir>', 'root for run directories', 'work')
+    .option(
+      '--resume <runId>',
+      'reuse an existing run\'s artifacts instead of starting over ("latest" for the most recent)',
+    )
     .option('--max-size-mb <mb>', 'repository size cap', parsePositiveNumber, 200)
     .option('--model <model>', 'model for the agent call (defaults to the CLI default)')
     .option('--json', 'print surfaces.json instead of a table', false)
