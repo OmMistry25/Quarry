@@ -7,22 +7,16 @@
 
 export const VERSION = '0.0.0';
 
-/** Stage identifiers, in pipeline order. See docs/SPEC.md. */
-export const STAGES = ['s1', 's2', 's3', 's4', 's5', 's6', 's7'] as const;
+export { STAGES, type Stage } from './types.js';
+export { QuarryError } from './errors.js';
 
-export type Stage = (typeof STAGES)[number];
-
-/**
- * Error type every stage throws on expected failure (size cap exceeded, unsupported
- * role, verification failure). Carries the stage so the CLI and the UI event stream
- * can report *where* a run died without parsing messages.
- */
-export class QuarryError extends Error {
-  readonly stage: Stage | undefined;
-
-  constructor(message: string, options: { stage?: Stage; cause?: unknown } = {}) {
-    super(message, options.cause === undefined ? undefined : { cause: options.cause });
-    this.name = 'QuarryError';
-    this.stage = options.stage;
-  }
-}
+export { ingest, type IngestOptions, type IngestResult } from './stages/s1-ingest.js';
+export {
+  Ingest,
+  INGEST_SCHEMA_VERSION,
+  type IngestSource,
+  type LanguageSummary,
+  type ManifestEntry,
+  type TreeEntry,
+} from './schemas/ingest.js';
+export { DEFAULT_MAX_REPO_BYTES, DEFAULT_MAX_FILE_BYTES } from './ingest/limits.js';
