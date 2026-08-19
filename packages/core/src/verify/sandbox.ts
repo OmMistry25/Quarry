@@ -30,7 +30,31 @@ const PASSTHROUGH_ENV = [
   'SHELL',
   'USER',
   'NODE_VERSION',
+
+  // Network reachability. Installing dependencies is the entire point of the install step,
+  // and on any machine behind a proxy — CI runners, corporate networks, this project's own
+  // container — dropping these means npm cannot reach the registry at all. It does not fail
+  // fast either: it hangs until the 5-minute timeout, and then the repair loop regenerates
+  // the whole package and hits exactly the same wall.
+  //
+  // Caveat worth knowing: a proxy URL can embed credentials. That is a real trade-off, but
+  // an install step with no network is useless, and the alternative is a tool that only works
+  // on unproxied machines.
+  'HTTP_PROXY',
+  'HTTPS_PROXY',
+  'NO_PROXY',
+  'http_proxy',
+  'https_proxy',
+  'no_proxy',
+  'NODE_EXTRA_CA_CERTS',
+  'SSL_CERT_FILE',
+  'SSL_CERT_DIR',
   'npm_config_registry',
+  'npm_config_proxy',
+  'npm_config_https_proxy',
+  'npm_config_noproxy',
+  'npm_config_cafile',
+  'npm_config_strict_ssl',
 ] as const;
 
 export function scrubbedEnv(source: NodeJS.ProcessEnv = process.env): NodeJS.ProcessEnv {

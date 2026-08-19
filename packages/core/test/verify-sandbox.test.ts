@@ -140,3 +140,38 @@ describe('tail', () => {
     expect(output).not.toContain('line 50');
   });
 });
+
+describe('network configuration reaches the sandbox', () => {
+  it('passes proxy and CA settings through', () => {
+    // Regression: the allowlist dropped these, so on any proxied machine `npm install` could
+    // not reach the registry. It did not fail fast either — it hung until the 5-minute
+    // timeout, and the repair loop then spent a full generation pass reaching the same wall.
+    const env = scrubbedEnv({
+      PATH: '/usr/bin',
+      HTTPS_PROXY: 'http://proxy:8080',
+      HTTP_PROXY: 'http://proxy:8080',
+      NO_PROXY: 'localhost',
+      NODE_EXTRA_CA_CERTS: '/etc/ca.pem',
+      npm_config_registry: 'https://registry.example.com',
+    });
+
+    expect(env.HTTPS_PROXY).toBe('http://proxy:8080');
+    expect(env.HTTP_PROXY).toBe('http://proxy:8080');
+    expect(env.NO_PROXY).toBe('localhost');
+    expect(env.NODE_EXTRA_CA_CERTS).toBe('/etc/ca.pem');
+    expect(env.npm_config_registry).toBe('https://registry.example.com');
+  });
+
+  it('still drops credentials while passing network settings', () => {
+    const env = scrubbedEnv({
+      PATH: '/usr/bin',
+      HTTPS_PROXY: 'http://proxy:8080',
+      ANTHROPIC_API_KEY: 'sk-leak',
+      GITHUB_TOKEN: 'ghp-leak',
+    });
+
+    expect(env.HTTPS_PROXY).toBeDefined();
+    expect(env.ANTHROPIC_API_KEY).toBeUndefined();
+    expect(env.GITHUB_TOKEN).toBeUndefined();
+  });
+});

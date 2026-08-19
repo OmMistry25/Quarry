@@ -242,3 +242,31 @@ describe('S6 verification', () => {
     expect((error as QuarryError).stage).toBe('s6');
   });
 });
+
+describe('environmental failures', () => {
+  it('marks an install timeout as environmental, not a package problem', async () => {
+    await buildPackage({ guard: '<=' });
+    const hanging = Meta.parse({
+      ...metaForNode,
+      generation: { ...metaForNode.generation, setupCommand: 'sleep 30' },
+    });
+
+    const report = await verify({ run, meta: hanging, now: NOW, installTimeoutMs: 500 });
+
+    expect(report.install.timedOut).toBe(true);
+    expect(report.environmental).toBe(true);
+  }, 60_000);
+
+  it('does not mark an ordinary failing install as environmental', async () => {
+    await buildPackage({ guard: '<=' });
+    const failing = Meta.parse({
+      ...metaForNode,
+      generation: { ...metaForNode.generation, setupCommand: 'exit 1' },
+    });
+
+    const report = await verify({ run, meta: failing, now: NOW });
+
+    // A package whose install genuinely errors is worth regenerating for.
+    expect(report.install.timedOut).toBe(false);
+  }, 60_000);
+});

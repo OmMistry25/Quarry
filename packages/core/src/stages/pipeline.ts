@@ -115,11 +115,22 @@ export async function generateVerifiedPackage(
     }
 
     if (attempt > maxRepairs) break;
+
+    // Regenerating cannot fix a machine problem. Failing now costs the user one wasted
+    // verification; carrying on would cost them a full generation pass to reach the same
+    // wall — which is exactly what happened the first time this ran behind a proxy.
+    if (report.environmental) break;
+
     options.onRepair?.(report.failures);
   }
 
   throw new QuarryError(
-    `Verification failed after ${attempt} generation attempt(s). Nothing was packaged.\n\n` +
+    (lastReport?.environmental === true
+      ? 'Verification failed for a reason regenerating cannot fix — this looks like the ' +
+        'machine, not the package. Check network access to the package registry (including ' +
+        'any proxy configuration) and that gitleaks is installed.\n\n'
+      : '') +
+      `Verification failed after ${attempt} generation attempt(s). Nothing was packaged.\n\n` +
       `${(lastReport?.failures ?? []).join('\n\n')}\n\n` +
       `Full logs: ${lastReport?.logPath ?? `${options.run.dir}/logs`}\n` +
       `Package left in place for inspection: ${packageDir}`,

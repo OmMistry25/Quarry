@@ -45,6 +45,12 @@ export interface VerifyStep {
 
 export interface VerifyReport {
   ok: boolean;
+  /**
+   * True when the failure is about the machine, not the package: an install that timed out
+   * (usually an unreachable registry), or gitleaks not being installed. Regenerating cannot
+   * fix either, so the repair loop must not waste a full generation pass on them.
+   */
+  environmental: boolean;
   install: CommandResult;
   tests: CommandResult;
   bugDemo: BugDemoResult | undefined;
@@ -171,8 +177,11 @@ export async function verify(options: VerifyOptions): Promise<VerifyReport> {
       failures,
     });
 
+    const environmental = install.timedOut || !secrets.ran;
+
     return {
       ok: failures.length === 0,
+      environmental,
       install,
       tests,
       bugDemo,
@@ -207,7 +216,7 @@ function indent(text: string): string {
 
 async function writeLog(
   run: RunDir,
-  report: Omit<VerifyReport, 'ok' | 'logPath'>,
+  report: Omit<VerifyReport, 'ok' | 'logPath' | 'environmental'>,
 ): Promise<string> {
   const logDir = path.join(run.dir, 'logs');
   await fs.mkdir(logDir, { recursive: true });
