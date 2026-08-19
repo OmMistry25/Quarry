@@ -3,7 +3,7 @@ import os from 'node:os';
 import path from 'node:path';
 
 import { roleArchetype, type RoleId } from '../archetypes/roles.js';
-import { SENIORITY_ARCHETYPES, taskForSeniority, type SeniorityId } from '../archetypes/tasks.js';
+import { resolveTask, type SeniorityId } from '../archetypes/tasks.js';
 import type { AgentTransport } from '../agent/claude.js';
 import { appendAgentLog } from '../agent/log.js';
 import { renderPrompt } from '../agent/prompts.js';
@@ -46,6 +46,8 @@ export interface GenerateOptions {
   retries?: number;
   now?: Date;
   onAttempt?: (attempt: AgentAttempt) => void;
+  /** Called when the requested task archetype was substituted, so the caller can say so. */
+  onSubstitution?: (reason: string) => void;
   /**
    * Failures from a previous verification run. SPEC S6 allows one repair loop; rather than
    * asking the generator to patch code it can no longer see, the whole package is written
@@ -75,8 +77,11 @@ export interface GenerateResult {
  * were instructions. Phase 2 established this by experiment; here it decides the design.
  */
 export async function generate(options: GenerateOptions): Promise<GenerateResult> {
-  const seniority = SENIORITY_ARCHETYPES[options.seniority];
-  const task = taskForSeniority(options.seniority);
+  const resolved = resolveTask(options.role, options.seniority);
+  const { task } = resolved;
+  const seniority = resolved.seniority;
+
+  if (resolved.substitution !== undefined) options.onSubstitution?.(resolved.substitution);
   const role = roleArchetype(options.role);
 
   const startedAt = options.now ?? new Date();
@@ -165,7 +170,7 @@ export async function generate(options: GenerateOptions): Promise<GenerateResult
       schemaVersion: META_SCHEMA_VERSION,
       runId: options.run.runId,
       role: options.role,
-      seniority: options.seniority,
+      seniority: seniority.id,
       task: task.id,
       source: {
         ref: options.ingest.source.ref,

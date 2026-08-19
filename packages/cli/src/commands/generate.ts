@@ -100,6 +100,11 @@ export function generateCommand(): Command {
         repairAttempts: options.repair === false ? 0 : 1,
         ...(options.model === undefined ? {} : { model: options.model }),
         onAttempt: (attempt) => reportAttempt(options.json, attempt),
+        onSubstitution: (reason) => {
+          // Never silent: seniority is a scope knob that means something, so a substituted
+          // archetype has to be visible to whoever reviews the package.
+          console.error(`\n!   ${reason}\n`);
+        },
         onStep: (step) => {
           if (options.json) return;
           const mark = step.ok ? 'ok  ' : 'FAIL';

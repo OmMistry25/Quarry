@@ -7,6 +7,7 @@ import {
   TASK_ARCHETYPES,
   TASK_IDS,
   taskForSeniority,
+  resolveTask,
 } from '../src/archetypes/tasks.js';
 
 describe('role archetypes match the SPEC table', () => {
@@ -103,5 +104,44 @@ describe('bug-hunt planting guidance', () => {
 
   it('gives the extension no planting guidance, since nothing is planted', () => {
     expect(TASK_ARCHETYPES.extension.plantingGuidance).toBeUndefined();
+  });
+});
+
+describe('resolveTask', () => {
+  it('leaves backend alone', () => {
+    const resolved = resolveTask('backend', 'junior');
+
+    expect(resolved.task.id).toBe('bug-hunt');
+    expect(resolved.substitution).toBeUndefined();
+  });
+
+  it('substitutes an extension for a frontend bug hunt', () => {
+    // Five documenso generations were rejected because a component suite catches almost any
+    // planted bug. It is a property of how those suites cover behaviour, not a prompt bug.
+    const resolved = resolveTask('frontend', 'junior');
+
+    expect(resolved.task.id).toBe('extension');
+    expect(resolved.seniority.id).toBe('mid');
+  });
+
+  it('explains the substitution rather than making it silently', () => {
+    const resolved = resolveTask('frontend', 'junior');
+
+    expect(resolved.substitution).toMatch(/does not work for the frontend role/);
+    expect(resolved.substitution).toMatch(/--seniority mid/);
+  });
+
+  it('does not interfere when frontend already asks for an extension', () => {
+    const resolved = resolveTask('frontend', 'mid');
+
+    expect(resolved.task.id).toBe('extension');
+    expect(resolved.substitution).toBeUndefined();
+  });
+
+  it('leaves senior frontend alone, design note and all', () => {
+    const resolved = resolveTask('frontend', 'senior');
+
+    expect(resolved.seniority.requiresDesignNote).toBe(true);
+    expect(resolved.substitution).toBeUndefined();
   });
 });

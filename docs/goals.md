@@ -12,7 +12,7 @@ Everything in the MVP exists to answer that. Anything that doesn't serve it gets
 |---|--------|--------|--------------|
 | 1 | "Would you send this as-is?" | ≥ 3 of 5 reviewers say yes or "with minor edits" | Show 5 people who hire engineers a generated package; ask the one question |
 | 2 | Edit distance | Reviewers estimate < 30 min of edits before sending | Same interviews |
-| 3 | End-to-end latency | Repo URL → downloadable package in < 10 min | Timed runs |
+| 3 | End-to-end latency | Repo URL → downloadable package in **< 20 min** | Timed runs |
 | 4 | Verification pass rate | ≥ 70% of generated packages install + pass their own tests on first generation attempt | Logged by the verify stage |
 | 5 | Multi-role proof | One monorepo produces credible packages for ≥ 2 different roles | Dogfood runs |
 

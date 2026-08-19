@@ -86,7 +86,7 @@ Scope boundaries live in mvp.md. Technical design lives in architecture-mvp.md. 
 
 ## Acceptance criteria
 
-1. `quarry generate <url> --role backend --seniority mid --auto` completes end-to-end on the three dogfood repos (mvp.md) in < 10 min each.
+1. `quarry generate <url> --role backend --seniority mid --auto` completes end-to-end on the three dogfood repos (mvp.md) in **< 20 min each**. (Was 10; raised after measurement — S5 generation alone is ~14.5 min on a real repo, and the figure had been set against a 16-file fixture. See docs/learnings.md.)
 2. Every shipped package passed S6, including the bug-demonstrability check for bug-hunt.
 3. `candidate/` installs and runs on a clean machine with one command and no external services.
 4. No file in `candidate/` matches any ≥ 8-line block from the source repo (automated check).

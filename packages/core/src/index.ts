@@ -68,6 +68,7 @@ export {
   type SurfaceContextBudget,
 } from './agent/surfaceContext.js';
 export { generate, type GenerateOptions, type GenerateResult } from './stages/s5-generate.js';
+export { repairPackage, type RepairOptions, type RepairResult } from './stages/s5-repair.js';
 export { Meta, META_SCHEMA_VERSION, type VerificationResult } from './schemas/meta.js';
 export {
   verify,
@@ -91,6 +92,8 @@ export {
   SENIORITY_ARCHETYPES,
   SENIORITY_IDS,
   taskForSeniority,
+  resolveTask,
+  type ResolvedTask,
   type TaskId,
   type SeniorityId,
 } from './archetypes/tasks.js';

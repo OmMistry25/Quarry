@@ -737,6 +737,44 @@ Options, none free, none taken here:
 Recommended: the third for the MVP, the first for v2. Frontend is a known gap with a known
 cause, not a mystery.
 
+---
+
+## Phase 7 — Latency, and the roles that were blocked on it
+
+### The target moved to 20 minutes, and the repair loop is what had to change
+
+Om's call: raise the target to 20 minutes **and** invest in hitting it. Both are now done, and
+the second turned out to be a smaller job than expected once the measurement was read
+properly.
+
+A clean run is ~15 minutes and was already inside 20. What broke the budget was the repair:
+the loop regenerated the whole package from scratch, so a run that needed one cost ~29–31
+minutes. **Latency was a repair-cost problem, not a generation-speed problem.**
+
+So the repair no longer regenerates. It hands the agent the package it already wrote, tells it
+what failed, and asks it to edit in place. That is a better fit for what actually goes wrong —
+the dominant failure is a handful of wrong lines in a package that is otherwise sound — and it
+is still the single loop SPEC allows, just a cheaper implementation of it.
+
+The repair prompt restates the invariants that a repair has broken before: the synthesis rule
+first, since a previous repair fixed its reported failure by copying from the reference; and
+the archetype rule, so a bug hunt cannot quietly remove its own planted bug to make the tests
+pass.
+
+SPEC acceptance 1 and `goals.md` metric 3 both now read 20 minutes, with the reason recorded
+in place rather than silently edited.
+
+### Frontend falls back to an extension, out loud
+
+Also Om's call. `--role frontend --seniority junior` now generates an **extension** and says
+so on stderr, rather than attempting a bug hunt that five documenso runs showed cannot work.
+
+The substitution is returned by `resolveTask()` rather than applied inside it, so every caller
+has to decide how to announce it and none can do it silently. Seniority is a scope knob that
+means something — a junior task is meant to be a bug hunt — and quietly handing a reviewer an
+extension would misrepresent what they are looking at. `meta.json` records what was actually
+generated, not what was requested.
+
 ### Out-of-scope temptations logged, not built
 
 - _(none yet)_

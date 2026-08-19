@@ -171,3 +171,47 @@ export const SENIORITY_ARCHETYPES: Readonly<Record<SeniorityId, SeniorityArchety
 export function taskForSeniority(seniority: SeniorityId): TaskArchetype {
   return TASK_ARCHETYPES[SENIORITY_ARCHETYPES[seniority].task];
 }
+
+/**
+ * Roles for which the bug-hunt archetype does not work.
+ *
+ * Backend tests assert input/output pairs and leave gaps between them, so a realistic bug
+ * fits in a gap. Component tests assert rendered state so densely that almost any component
+ * bug trips something already asserted — five generations against `documenso/documenso` were
+ * rejected for exactly that, one of them with 20 of its own tests failing. It is a property
+ * of how the suites cover behaviour, not something a better prompt fixes.
+ */
+const BUG_HUNT_UNSUITED_ROLES: ReadonlySet<string> = new Set(['frontend']);
+
+export interface ResolvedTask {
+  task: TaskArchetype;
+  seniority: SeniorityArchetype;
+  /** Set when the requested archetype was substituted; the caller must say so out loud. */
+  substitution?: string;
+}
+
+/**
+ * Pick the task for a role and seniority, substituting where the requested combination is
+ * known not to work.
+ *
+ * The substitution is returned rather than applied silently. Seniority is a scope knob that
+ * means something — a junior task is meant to be a bug hunt — so quietly handing back an
+ * extension would misrepresent what the reviewer is looking at.
+ */
+export function resolveTask(role: string, seniority: SeniorityId): ResolvedTask {
+  const chosen = SENIORITY_ARCHETYPES[seniority];
+
+  if (chosen.task === 'bug-hunt' && BUG_HUNT_UNSUITED_ROLES.has(role)) {
+    return {
+      task: TASK_ARCHETYPES.extension,
+      seniority: SENIORITY_ARCHETYPES.mid,
+      substitution:
+        `A bug hunt does not work for the ${role} role: component tests assert rendered ` +
+        "state densely enough that the starter's own suite catches almost any planted bug. " +
+        'Generating an extension task instead, which asks the candidate to build rather than ' +
+        'to find. Pass --seniority mid to choose this explicitly.',
+    };
+  }
+
+  return { task: TASK_ARCHETYPES[chosen.task], seniority: chosen };
+}

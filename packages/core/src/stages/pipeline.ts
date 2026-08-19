@@ -10,6 +10,7 @@ import type { Surface } from '../schemas/surfaces.js';
 import type { RunDir } from '../run.js';
 
 import { generate } from './s5-generate.js';
+import { repairPackage } from './s5-repair.js';
 import { packageRun, type PackageResult } from './s7-package.js';
 import { verify, type VerifyReport, type VerifyStep } from './s6-verify.js';
 
@@ -17,10 +18,14 @@ import { verify, type VerifyReport, type VerifyStep } from './s6-verify.js';
  * Generate → verify → (repair once) → package.
  *
  * SPEC S6: "On failure: one automatic repair loop (feed errors back to the generator), then
- * fail loudly with logs." The repair is a *fresh* generation given the failures, not a patch
- * attempt — the generator has no memory of the previous run, and asking it to fix code it
- * cannot see produces worse results than asking it to write the thing again knowing what
- * went wrong.
+ * fail loudly with logs."
+ *
+ * That loop is a *targeted* repair: the agent is handed the package it already wrote and asked
+ * to edit the parts that failed. Regenerating from scratch also works and was tried first, but
+ * it costs a second full generation — ~870 s on a real repo, turning a 15-minute run into a
+ * 31-minute one, on precisely the runs that were already going badly. It is also more than the
+ * job needs, since the dominant failure is a handful of wrong lines in a package that is
+ * otherwise sound.
  */
 
 export interface GenerateVerifiedOptions {
@@ -38,6 +43,7 @@ export interface GenerateVerifiedOptions {
   onAttempt?: (attempt: AgentAttempt) => void;
   onStep?: (step: VerifyStep) => void;
   onRepair?: (failures: string[]) => void;
+  onSubstitution?: (reason: string) => void;
   installTimeoutMs?: number;
   testTimeoutMs?: number;
 }
@@ -57,33 +63,60 @@ export async function generateVerifiedPackage(
 ): Promise<GenerateVerifiedResult> {
   const maxRepairs = options.repairAttempts ?? 1;
 
+  const generated = await generate({
+    run: options.run,
+    ingest: options.ingest,
+    components: options.components,
+    surface: options.surface,
+    role: options.role,
+    seniority: options.seniority,
+    ...(options.model === undefined ? {} : { model: options.model }),
+    ...(options.transport === undefined ? {} : { transport: options.transport }),
+    ...(options.now === undefined ? {} : { now: options.now }),
+    ...(options.onAttempt === undefined ? {} : { onAttempt: options.onAttempt }),
+    ...(options.onSubstitution === undefined ? {} : { onSubstitution: options.onSubstitution }),
+  });
+
+  const packageDir = generated.packageDir;
+  let meta = generated.meta;
+
   let attempt = 0;
   let lastReport: VerifyReport | undefined;
-  let packageDir = '';
 
   while (attempt <= maxRepairs) {
     attempt += 1;
 
-    const generated = await generate({
-      run: options.run,
-      ingest: options.ingest,
-      components: options.components,
-      surface: options.surface,
-      role: options.role,
-      seniority: options.seniority,
-      ...(options.model === undefined ? {} : { model: options.model }),
-      ...(options.transport === undefined ? {} : { transport: options.transport }),
-      ...(options.now === undefined ? {} : { now: options.now }),
-      ...(options.onAttempt === undefined ? {} : { onAttempt: options.onAttempt }),
-      ...(lastReport === undefined ? {} : { priorFailures: lastReport.failures }),
-    });
+    if (attempt > 1) {
+      options.onRepair?.(lastReport?.failures ?? []);
 
-    packageDir = generated.packageDir;
+      const repaired = await repairPackage({
+        run: options.run,
+        meta,
+        seniority: options.seniority,
+        failures: lastReport?.failures ?? [],
+        packageDir,
+        ...(options.model === undefined ? {} : { model: options.model }),
+        ...(options.transport === undefined ? {} : { transport: options.transport }),
+        ...(options.now === undefined ? {} : { now: options.now }),
+        ...(options.onAttempt === undefined ? {} : { onAttempt: options.onAttempt }),
+      });
+
+      // A repair may correct the documented commands, and verification has to use the
+      // corrected ones — a wrong test command was one of the failures it exists to fix.
+      meta = {
+        ...meta,
+        generation: {
+          ...meta.generation,
+          setupCommand: repaired.setupCommand,
+          testCommand: repaired.testCommand,
+        },
+      };
+    }
 
     const report = await verify({
       run: options.run,
-      meta: generated.meta,
-      packageDir: generated.packageDir,
+      meta,
+      packageDir,
       ...(options.now === undefined ? {} : { now: options.now }),
       ...(options.onStep === undefined ? {} : { onStep: options.onStep }),
       ...(options.installTimeoutMs === undefined
@@ -98,15 +131,15 @@ export async function generateVerifiedPackage(
       const verification = toVerification(report, options.now ?? new Date());
       const packaged = await packageRun({
         run: options.run,
-        meta: generated.meta,
+        meta,
         verification,
-        packageDir: generated.packageDir,
+        packageDir,
         ...(options.now === undefined ? {} : { now: options.now }),
       });
 
       return {
         meta: packaged.meta,
-        packageDir: generated.packageDir,
+        packageDir,
         report,
         verification,
         package: packaged,
@@ -116,21 +149,19 @@ export async function generateVerifiedPackage(
 
     if (attempt > maxRepairs) break;
 
-    // Regenerating cannot fix a machine problem. Failing now costs the user one wasted
-    // verification; carrying on would cost them a full generation pass to reach the same
-    // wall — which is exactly what happened the first time this ran behind a proxy.
+    // Repairing cannot fix a machine problem. Failing now costs one wasted verification;
+    // carrying on would spend an agent call to reach the same wall — which is exactly what
+    // happened the first time this ran behind a proxy.
     if (report.environmental) break;
-
-    options.onRepair?.(report.failures);
   }
 
   throw new QuarryError(
     (lastReport?.environmental === true
-      ? 'Verification failed for a reason regenerating cannot fix — this looks like the ' +
+      ? 'Verification failed for a reason repairing cannot fix — this looks like the ' +
         'machine, not the package. Check network access to the package registry (including ' +
         'any proxy configuration) and that gitleaks is installed.\n\n'
       : '') +
-      `Verification failed after ${attempt} generation attempt(s). Nothing was packaged.\n\n` +
+      `Verification failed after ${attempt} attempt(s). Nothing was packaged.\n\n` +
       `${(lastReport?.failures ?? []).join('\n\n')}\n\n` +
       `Full logs: ${lastReport?.logPath ?? `${options.run.dir}/logs`}\n` +
       `Package left in place for inspection: ${packageDir}`,
