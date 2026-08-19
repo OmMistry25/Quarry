@@ -4,6 +4,7 @@ import path from 'node:path';
 import type { AgentTransport } from '../agent/claude.js';
 import { buildRepoContext, DEFAULT_CONTEXT_BUDGET, type ContextBudget } from '../agent/context.js';
 import { renderPrompt } from '../agent/prompts.js';
+import { appendAgentLog } from '../agent/log.js';
 import { runAgent, type AgentAttempt } from '../agent/runAgent.js';
 import { QuarryError } from '../errors.js';
 import { Ingest } from '../schemas/ingest.js';
@@ -53,7 +54,10 @@ export async function cartography(options: CartographyOptions): Promise<Cartogra
     ...(options.retries === undefined ? {} : { retries: options.retries }),
     ...(options.model === undefined ? {} : { model: options.model }),
     ...(options.transport === undefined ? {} : { transport: options.transport }),
-    ...(options.onAttempt === undefined ? {} : { onAttempt: options.onAttempt }),
+    onAttempt: (attempt) => {
+      void appendAgentLog(options.run, attempt);
+      options.onAttempt?.(attempt);
+    },
   });
 
   const artifact: Components = {

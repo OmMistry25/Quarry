@@ -3,6 +3,8 @@ import { VERSION } from 'core';
 
 import { ingestCommand } from './commands/ingest.js';
 import { mapCommand } from './commands/map.js';
+import { rolesCommand } from './commands/roles.js';
+import { surfacesCommand } from './commands/surfaces.js';
 
 /**
  * Subcommands are registered as their pipeline stages land:
@@ -23,6 +25,8 @@ export function buildProgram(): Command {
 
   program.addCommand(ingestCommand());
   program.addCommand(mapCommand());
+  program.addCommand(rolesCommand());
+  program.addCommand(surfacesCommand());
 
   return program;
 }

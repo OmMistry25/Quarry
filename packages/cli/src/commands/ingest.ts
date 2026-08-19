@@ -1,7 +1,9 @@
 import path from 'node:path';
 
-import { Command, InvalidArgumentError } from 'commander';
+import { Command } from 'commander';
 import { ingest, type Ingest } from 'core';
+
+import { parsePositiveNumber } from './pipeline.js';
 
 export function ingestCommand(): Command {
   return new Command('ingest')
@@ -31,14 +33,6 @@ interface IngestCommandOptions {
   workDir: string;
   maxSizeMb: number;
   json: boolean;
-}
-
-function parsePositiveNumber(value: string): number {
-  const parsed = Number(value);
-  if (!Number.isFinite(parsed) || parsed <= 0) {
-    throw new InvalidArgumentError('must be a positive number');
-  }
-  return parsed;
 }
 
 export function formatSummary(artifact: Ingest): string {
