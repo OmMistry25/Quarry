@@ -1,0 +1,22 @@
+{
+  "name": "cli",
+  "version": "0.0.0",
+  "private": true,
+  "description": "Quarry command-line interface.",
+  "type": "module",
+  "bin": {
+    "quarry": "./dist/index.js"
+  },
+  "files": [
+    "dist"
+  ],
+  "scripts": {
+    "build": "tsc -b",
+    "clean": "tsc -b --clean",
+    "dev": "pnpm --filter core build && tsx src/index.ts"
+  },
+  "dependencies": {
+    "commander": "^14.0.2",
+    "core": "workspace:*"
+  }
+}
