@@ -66,6 +66,23 @@ export {
   buildSurfaceContext,
   type SurfaceContextBudget,
 } from './agent/surfaceContext.js';
+export { generate, type GenerateOptions, type GenerateResult } from './stages/s5-generate.js';
+export { Meta, META_SCHEMA_VERSION, type VerificationResult } from './schemas/meta.js';
+export {
+  TASK_ARCHETYPES,
+  TASK_IDS,
+  SENIORITY_ARCHETYPES,
+  SENIORITY_IDS,
+  taskForSeniority,
+  type TaskId,
+  type SeniorityId,
+} from './archetypes/tasks.js';
+export {
+  buildReferenceMaterial,
+  DEFAULT_REFERENCE_BUDGET,
+  type ReferenceBudget,
+} from './agent/referenceMaterial.js';
+
 export {
   componentMatcher,
   filesForComponent,
