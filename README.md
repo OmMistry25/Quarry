@@ -37,6 +37,7 @@ pnpm --filter cli dev -- --help
 pnpm --filter cli dev -- map https://github.com/owner/repo
 pnpm --filter cli dev -- roles https://github.com/owner/repo
 pnpm --filter cli dev -- surfaces https://github.com/owner/repo --role backend --auto
+pnpm --filter cli dev -- generate https://github.com/owner/repo --role backend --seniority junior --auto
 ```
 
 Agent-stage tests run against recorded replies by default. `LIVE=1 pnpm test` runs them

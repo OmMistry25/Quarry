@@ -29,10 +29,10 @@ Rules: work top to bottom. Check items off in this file as they're completed. Ea
 - ✅ Check: `quarry roles <url>` prints the role card table; `quarry surfaces <url> --role backend` lists 3–5 surfaces with scores.
 
 ## Phase 4 — S5 Generation (backend × bug-hunt only)
-- [ ] Archetype definitions as data (`archetypes/roles.ts`, `archetypes/tasks.ts`) per SPEC table
-- [ ] Reference-material selector (≤ 40 files / 150 KB from surface definition)
-- [ ] `prompts/s5-generate.md`: synthesis rule, stub rule, one-command run, no external services
-- [ ] Emits `candidate/` (repo + README + BRIEF.md), `interviewer/` (rubric.md, answer-key.md, verify.test.*), `meta.json`
+- [x] Archetype definitions as data (`archetypes/roles.ts`, `archetypes/tasks.ts`) per SPEC table
+- [x] Reference-material selector (≤ 40 files / 150 KB from surface definition)
+- [x] `prompts/s5-generate.md`: synthesis rule, stub rule, one-command run, no external services
+- [x] Emits `candidate/` (repo + README + BRIEF.md), `interviewer/` (rubric.md, answer-key.md, verify.test.*), `meta.json`
 - ✅ Check: generation completes on fixture repo; output *looks* right by eye (verification is next phase).
 
 ## Phase 5 — S6 Verify + S7 Package
