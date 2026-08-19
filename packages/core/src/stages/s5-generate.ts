@@ -158,6 +158,7 @@ export async function generate(options: GenerateOptions): Promise<GenerateResult
       requiresVerifyTest: task.requiresBugDemonstration,
       requiresDesignNote: seniority.requiresDesignNote,
       packageDir,
+      claimed: result.data.files,
     });
 
     const meta = Meta.parse({
@@ -266,7 +267,12 @@ async function listFiles(root: string): Promise<string[]> {
  */
 async function assertPackageShape(
   files: string[],
-  wants: { requiresVerifyTest: boolean; requiresDesignNote: boolean; packageDir: string },
+  wants: {
+    requiresVerifyTest: boolean;
+    requiresDesignNote: boolean;
+    packageDir: string;
+    claimed: readonly string[];
+  },
 ): Promise<void> {
   const problems: string[] = [];
 
@@ -293,10 +299,21 @@ async function assertPackageShape(
   }
 
   if (problems.length > 0) {
+    // When the reply and the filesystem disagree, both sides are worth printing: an agent
+    // that claims files it never wrote is a different problem from one that wrote the wrong
+    // ones, and the message should say which happened.
+    const disagreement =
+      files.length === 0 && wants.claimed.length > 0
+        ? `\n\nThe agent reported writing ${wants.claimed.length} file(s) that are not on ` +
+          `disk:\n${wants.claimed.map((file) => `  ${file}`).join('\n')}\n` +
+          'Nothing reached the filesystem. See logs/agent.log for its full reply.'
+        : '';
+
     throw new QuarryError(
       `The generator did not write: ${problems.join(', ')}.\n` +
         `It wrote ${files.length} file(s); inspect them at ${wants.packageDir}\n` +
-        files.map((file) => `  ${file}`).join('\n'),
+        files.map((file) => `  ${file}`).join('\n') +
+        disagreement,
       { stage: 's5' },
     );
   }

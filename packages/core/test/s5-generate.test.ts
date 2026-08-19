@@ -355,3 +355,37 @@ describe('repair prompts', () => {
     expect(transport.calls[0]?.prompt).not.toMatch(/previous attempt/);
   });
 });
+
+describe('when the reply and the filesystem disagree', () => {
+  it('says the agent claimed files it never wrote', async () => {
+    // A documenso run returned a schema-valid manifest and wrote nothing at all. Without
+    // both sides printed, "the generator did not write X" reads as though it wrote the wrong
+    // files rather than none — a different problem with a different cause.
+    const transport = async (): Promise<AgentReply> => ({
+      text: JSON.stringify({
+        files: ['candidate/README.md', 'candidate/BRIEF.md'],
+        setupCommand: 'npm install',
+        testCommand: 'npm test',
+        plantedBugFile: 'candidate/src/a.ts',
+      }),
+      costUsd: 1,
+    });
+
+    const error = await run5(transport).catch((caught: unknown) => caught);
+
+    expect(error).toBeInstanceOf(QuarryError);
+    const message = (error as QuarryError).message;
+    expect(message).toMatch(/reported writing 2 file\(s\) that are not on disk/);
+    expect(message).toMatch(/Nothing reached the filesystem/);
+    expect(message).toMatch(/agent\.log/);
+  });
+
+  it("records the agent's reply even on a successful attempt", async () => {
+    const seen: { reply?: string }[] = [];
+    await run5(writingTransport(VALID_PACKAGE), {
+      onAttempt: (attempt) => seen.push(attempt),
+    });
+
+    expect(seen[0]?.reply).toMatch(/setupCommand/);
+  });
+});

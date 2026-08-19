@@ -45,6 +45,12 @@ export interface AgentAttempt {
   attempt: number;
   outcome: 'ok' | 'invalid-json' | 'schema-mismatch';
   detail?: string;
+  /**
+   * The agent's reply, truncated. Kept even on success: a reply can parse cleanly and still
+   * be wrong about the world — S5 once returned a valid manifest of files it had not written,
+   * and without the reply there was no way to tell what it thought it had done.
+   */
+  reply?: string;
 }
 
 export interface AgentResult<T> {
@@ -119,7 +125,12 @@ export async function runAgent<T>(options: RunAgentOptions<T>): Promise<AgentRes
 
       const parsed = options.schema.safeParse(value);
       if (parsed.success) {
-        options.onAttempt?.({ stage: options.stage, attempt, outcome: 'ok' });
+        options.onAttempt?.({
+          stage: options.stage,
+          attempt,
+          outcome: 'ok',
+          reply: truncate(reply.text),
+        });
         return { data: parsed.data, attempts: attempt, costUsd };
       }
 
@@ -129,6 +140,7 @@ export async function runAgent<T>(options: RunAgentOptions<T>): Promise<AgentRes
         attempt,
         outcome: 'schema-mismatch',
         detail: lastFailure,
+        reply: truncate(reply.text),
       });
       prompt = withFeedback(options.prompt, lastFailure);
     }
@@ -143,6 +155,10 @@ export async function runAgent<T>(options: RunAgentOptions<T>): Promise<AgentRes
       await fs.rm(ownedCwd, { recursive: true, force: true });
     }
   }
+}
+
+function truncate(text: string, max = 4_000): string {
+  return text.length <= max ? text : `${text.slice(0, max)}\n… (${text.length} chars total)`;
 }
 
 function withFeedback(basePrompt: string, failure: string): string {
