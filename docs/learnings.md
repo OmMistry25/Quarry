@@ -474,6 +474,69 @@ implemented — flagged.
   generator was allowed to read. That is the audit trail if a package is ever challenged on
   invariant 1.
 
+---
+
+## Phase 5 — S6 Verify + S7 Package
+
+### The overlap-check decision, as settled
+
+Dependency manifests (`package.json`, lockfiles, `requirements.txt`, `pyproject.toml`) are
+exempt; everything that can carry logic stays byte-strict, including `tsconfig.json` and
+`vitest.config.ts`. A generated repo is *supposed* to declare the same libraries at the same
+versions — that is the stub rule working — and a dependency list leaks nothing S2 does not
+already report openly. The allowlist has its own test, and a test proves a copied source file
+still fails in a repo that also contains an exempt manifest.
+
+### The fix had to become code
+
+SPEC's bug-demonstrability check needs the answer-key fix *applied*, but the answer key is
+prose. S5 now also writes `interviewer/fix/`, containing the complete corrected version of
+every file the fix touches, at the same path it has inside `candidate/`. S6 copies
+`candidate/`, overlays those files, and re-runs the verification test. Full corrected files
+rather than a diff: no patch-application fuzz, and the reviewer can read the fix directly.
+
+### Two real bugs the tests found
+
+Both were in the product, not the tests, and neither would have surfaced without running the
+checks against deliberately broken packages.
+
+1. **Killing the shell did not kill its children.** `execa`'s timeout terminated the shell,
+   but any process it had spawned survived, kept the pipe open, and the await blocked for the
+   *child's* full lifetime. A 300 ms timeout took 5 s to return — so a hung `npm install`
+   would have stalled the pipeline for its entire duration while being correctly reported as
+   timed out. Fixed with `detached: true` plus a process-group kill: 5008 ms → 307 ms, with a
+   regression test asserting the elapsed time, not just the flag.
+2. **stdin was left open.** A bare `node` opened a REPL and waited forever. This is what a
+   generated test command that reads stdin, or a package manager that asks to confirm, would
+   have done to a real run. Fixed with `stdin: 'ignore'`.
+
+### Decisions
+
+- **The environment is an allowlist, not a denylist.** A new secret in the operator's shell
+  must not become visible to generated code just because nobody thought to block it. There is
+  a test asserting an unknown future token is dropped.
+- **Verification works on a copy.** Installing writes `node_modules` and the bug-demo check
+  mutates files; the packaged artifact has to stay exactly as generated. A test asserts the
+  verification test never lands in the real package.
+- **A failing install does not produce fake test results.** The tests step is explicitly
+  marked skipped rather than run against a half-installed tree.
+- **The repair loop regenerates rather than patches.** SPEC allows one loop; the generator has
+  no memory of the previous attempt and cannot see the code it wrote, so asking it to fix
+  something invisible produces worse results than asking it to write the package again
+  knowing exactly what failed. The failures are appended to the S5 prompt verbatim.
+- **gitleaks missing is a failure, not a skip.** `ran: false` is distinguished from a clean
+  scan, and a package that could not be scanned is never shipped.
+- **S7 checks the verification block itself** rather than trusting its caller, and rewrites
+  `meta.json` with it — so the shipped package carries proof of what was checked rather than
+  only a claim that it was.
+
+### Process note
+
+Nine tests were left failing for a while because adding the `interviewer/fix/` requirement to
+S5 invalidated a Phase 4 test fixture, and the full suite was not re-run until later. Cheap to
+fix, but the lesson is to run the whole suite after changing a stage's contract, not only the
+tests for the stage being edited.
+
 ### Out-of-scope temptations logged, not built
 
 - _(none yet)_

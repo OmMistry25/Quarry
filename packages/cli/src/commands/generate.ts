@@ -1,7 +1,7 @@
 import { Command, InvalidArgumentError } from 'commander';
 import {
   assertRoleSupported,
-  generate,
+  generateVerifiedPackage,
   pickSurface,
   surfaceSelection,
   ROLE_IDS,
@@ -24,6 +24,8 @@ interface GenerateOptions extends SharedOptions {
   seniority: SeniorityId;
   auto: boolean;
   surface?: string;
+  /** commander sets this false when --no-repair is passed. */
+  repair: boolean;
 }
 
 export function generateCommand(): Command {
@@ -37,6 +39,7 @@ export function generateCommand(): Command {
     .option('--work-dir <dir>', 'root for run directories', 'work')
     .option('--max-size-mb <mb>', 'repository size cap', parsePositiveNumber, 200)
     .option('--model <model>', 'model for the agent calls (defaults to the CLI default)')
+    .option('--no-repair', 'fail on the first bad package instead of regenerating once')
     .option('--json', 'print meta.json instead of a summary', false)
     .action(async (repo: string, options: GenerateOptions) => {
       if (!options.auto && options.surface === undefined) {
@@ -71,27 +74,42 @@ export function generateCommand(): Command {
         console.error('S5  generating package… this is the slow one');
       }
 
-      const generated = await generate({
+      const result = await generateVerifiedPackage({
         run: mapped.run,
         ingest: mapped.ingest,
         components: mapped.components,
         surface,
         role: options.role,
         seniority: options.seniority,
+        repairAttempts: options.repair === false ? 0 : 1,
         ...(options.model === undefined ? {} : { model: options.model }),
         onAttempt: (attempt) => reportAttempt(options.json, attempt),
+        onStep: (step) => {
+          if (options.json) return;
+          const mark = step.ok ? 'ok  ' : 'FAIL';
+          console.error(`S6  ${mark} ${step.name.padEnd(9)} ${firstLine(step.detail)}`);
+        },
+        onRepair: (failures) => {
+          if (options.json) return;
+          console.error(
+            `\nS5  verification failed; regenerating once with ${failures.length} problem(s) ` +
+              'fed back',
+          );
+        },
       });
 
       if (options.json) {
-        console.log(JSON.stringify(generated.meta, null, 2));
+        console.log(JSON.stringify(result.meta, null, 2));
         return;
       }
 
-      console.log(`\n${formatPackage(generated.meta, generated.files)}`);
-      console.log(`\nWrote ${generated.packageDir}`);
+      const files = Object.keys(result.meta).length > 0 ? await listPackage(result.packageDir) : [];
+      console.log(`\n${formatPackage(result.meta, files)}`);
+      if (result.generations > 1) {
+        console.log(`\nTook ${result.generations} generation attempts (one repair loop).`);
+      }
       console.log(
-        '\nNot verified yet — S6 runs install, tests, bug demonstrability, gitleaks and the ' +
-          'overlap check (Phase 5).',
+        `\nVerified. Wrote ${result.package.zipPath} (${formatBytes(result.package.bytes)})`,
       );
     });
 }
@@ -119,6 +137,32 @@ function parseSeniority(value: string): SeniorityId {
     throw new InvalidArgumentError(`must be one of: ${SENIORITY_IDS.join(', ')}`);
   }
   return value as SeniorityId;
+}
+
+function firstLine(detail: string): string {
+  return detail.split('\n')[0] ?? '';
+}
+
+function formatBytes(bytes: number): string {
+  if (bytes < 1_000) return `${bytes} B`;
+  if (bytes < 1_000_000) return `${(bytes / 1_000).toFixed(1)} kB`;
+  return `${(bytes / 1_000_000).toFixed(1)} MB`;
+}
+
+async function listPackage(packageDir: string): Promise<string[]> {
+  const { readdir } = await import('node:fs/promises');
+  const out: string[] = [];
+
+  const walk = async (dir: string, rel: string): Promise<void> => {
+    for (const entry of await readdir(dir, { withFileTypes: true })) {
+      const relPath = rel === '' ? entry.name : `${rel}/${entry.name}`;
+      if (entry.isDirectory()) await walk(`${dir}/${entry.name}`, relPath);
+      else out.push(relPath);
+    }
+  };
+
+  await walk(packageDir, '');
+  return out.sort();
 }
 
 export function formatPackage(meta: Meta, files: string[]): string {

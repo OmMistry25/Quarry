@@ -36,12 +36,12 @@ Rules: work top to bottom. Check items off in this file as they're completed. Ea
 - ✅ Check: generation completes on fixture repo; output *looks* right by eye (verification is next phase).
 
 ## Phase 5 — S6 Verify + S7 Package
-- [ ] Sandbox runner: scrubbed-env subprocess, install (5 min) + test (3 min) timeouts
-- [ ] Bug-demonstrability check (verify test fails on starter, passes on patched)
-- [ ] 8-line shingle overlap check vs. source repo
-- [ ] gitleaks over package dir
-- [ ] One repair loop on failure, then hard fail with logs
-- [ ] `archiver` zip + final CLI output
+- [x] Sandbox runner: scrubbed-env subprocess, install (5 min) + test (3 min) timeouts
+- [x] Bug-demonstrability check (verify test fails on starter, passes on patched)
+- [x] 8-line shingle overlap check vs. source repo
+- [x] gitleaks over package dir
+- [x] One repair loop on failure, then hard fail with logs
+- [x] `archiver` zip + final CLI output
 - ✅ Check: `quarry generate <fixture> --role backend --seniority junior --auto` → verified zip.
 
 ## Phase 6 — End-to-end hardening
