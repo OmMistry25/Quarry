@@ -376,6 +376,104 @@ S3 itself is free — it is a pure function, so the same inputs always produce t
   and it will start to hurt during Phase 4 iteration.
 - The `--json-schema` CLI flag remains unused, as recorded in Phase 2.
 
+---
+
+## Phase 4 — S5 Generation
+
+### The CLAUDE.md leak, in its hardest form
+
+Phase 2 solved this by running agents in a temp directory outside the repo. S5 could not
+simply inherit that, because it genuinely needs a *writable* working directory — and
+`work/<run>/package` sits inside Quarry's own checkout, so generating there would feed
+Quarry's working agreement to the generator as instructions.
+
+Resolution: generate into `mkdtemp()` outside the repo, then copy the result into the run
+directory and delete the temp dir. There is a test asserting the cwd handed to the transport
+is not inside the checkout, and a test that no temp directory survives a failed run.
+
+### Write mode
+
+S5 needed a second kind of agent invocation, so `AgentInvocation` gained a `mode`:
+
+- `analyse` (S2, S4) — no tools; the context is already in the prompt.
+- `write` (S5) — `--permission-mode acceptEdits` plus an explicit
+  `--allowedTools Read Write Edit Glob Grep`.
+
+`acceptEdits` rather than skipping permissions wholesale, and **no Bash**: a generation pass
+cannot install packages, run tests, or reach the network. Running generated code is S6's job,
+in a sandbox. Verified by probe before building anything on it.
+
+### First real generation, measured
+
+`quarry generate <fixture> --role backend --seniority junior --auto`:
+
+| | |
+|---|---|
+| Wall clock | **7m 18s** (S5 alone ~6m) |
+| Cost | **$1.60** total for S1–S5 |
+| Output | 16 files in `candidate/`, 3 in `interviewer/` |
+
+Comfortably inside the architecture doc's "$1–3 per package" and "< 10 min" envelope, though
+the fixture is tiny — a real repo will cost more.
+
+### The package was checked by hand, not just by eye
+
+The Phase 4 acceptance bar is "looks right by eye", but most of S6 could be run manually, and
+was — which de-risks Phase 5 considerably:
+
+- **One-command setup**: `npm install` → 193 packages, 16s. SQLite, no external services.
+- **Shipped tests pass against the planted bug**: 8 passed. This matters — a bug the shipped
+  suite already catches is not a bug hunt, since `npm test` would find it immediately.
+- **Bug demonstrability**: `interviewer/verify.test.ts` **fails** on the starter (expected 200,
+  got 422), **passes** after applying the answer-key fix, and the shipped tests still pass
+  afterwards. That is the S6 check, proven by hand.
+- **gitleaks**: clean.
+- **Quality**: BRIEF.md reads as a genuine support escalation — symptom without cause, no file
+  named, real business impact, reproduction steps. The planted bug is `next <= 0` instead of
+  `next < 0`, with a comment above it stating the *correct* intent, which is exactly what
+  makes it plausible. The rubric uses the five backend dimensions with weights summing to 100.
+- **Domain fictionalised** as SPEC requires: warehouse inventory became clinic supply
+  dispensations. Same shape, different nouns.
+
+One soft contract miss: the prompt asks for 5–8 debrief questions and the generator wrote 10.
+Not worth a brittle check.
+
+### The overlap-check question, now answered by evidence — needs a decision
+
+Phase 0 predicted this and pre-committed to raising it rather than quietly carving out an
+exemption. Running an ad-hoc 8-line shingle check over the generated package against the
+source fixture:
+
+- **Code files: zero overlapping blocks.** The synthesis rule holds where it matters.
+- **One hit, in `package.json`**: the dependency block, because both declare
+  `better-sqlite3 ^11.0.0`, `express ^4.19.2`, `zod ^3.23.8` in the same conventional order.
+
+This one cannot be fixed in generation without making the output worse. The generated repo is
+*supposed* to mirror the source's stack at compatible versions — that is the stub rule
+working. Forcing divergence would mean deliberately picking different library versions, which
+no reviewer would thank us for.
+
+There is also a wording tension between the two source documents:
+
+- **CLAUDE.md invariant 1**: "zero verbatim source-repo **code**". A dependency version list
+  is not code, and this reading permits the exemption.
+- **SPEC acceptance #4**: "**No file** in `candidate/` matches any ≥ 8-line block". This
+  reading does not.
+
+Recommendation, for the maintainer to decide before Phase 5 implements S6: keep the check
+byte-strict over every file that can carry logic, and exempt only a named allowlist of
+dependency manifests (`package.json`, `package-lock.json`, `pnpm-lock.yaml`,
+`requirements.txt`, `pyproject.toml`), with the allowlist itself covered by a test. Not
+implemented — flagged.
+
+### Noted for later phases
+
+- S5 is slow enough (~6 min) that Phase 5's repair loop will roughly double a failing run.
+  The absence of `--from` resumability is now the most expensive missing affordance.
+- `meta.json` carries `generation.referenceFiles` — the exact list of source files the
+  generator was allowed to read. That is the audit trail if a package is ever challenged on
+  invariant 1.
+
 ### Out-of-scope temptations logged, not built
 
 - _(none yet)_

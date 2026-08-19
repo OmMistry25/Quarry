@@ -3,6 +3,7 @@ import { VERSION } from 'core';
 
 import { ingestCommand } from './commands/ingest.js';
 import { mapCommand } from './commands/map.js';
+import { generateCommand } from './commands/generate.js';
 import { rolesCommand } from './commands/roles.js';
 import { surfacesCommand } from './commands/surfaces.js';
 
@@ -27,6 +28,7 @@ export function buildProgram(): Command {
   program.addCommand(mapCommand());
   program.addCommand(rolesCommand());
   program.addCommand(surfacesCommand());
+  program.addCommand(generateCommand());
 
   return program;
 }

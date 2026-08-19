@@ -19,6 +19,10 @@ const SYSTEM_PROMPT =
 
 export interface RunAgentOptions<T> {
   stage: Stage;
+  /** Overrides the default analysis system prompt. S5 needs a generator, not an analyser. */
+  systemPrompt?: string;
+  /** See `AgentInvocation.mode`. */
+  mode?: 'analyse' | 'write';
   /** The rendered prompt — built from a template in `prompts/`, never inline in TypeScript. */
   prompt: string;
   schema: z.ZodType<T>;
@@ -76,10 +80,11 @@ export async function runAgent<T>(options: RunAgentOptions<T>): Promise<AgentRes
     for (let attempt = 1; attempt <= retries + 1; attempt += 1) {
       const reply = await transport({
         prompt,
-        systemPrompt: SYSTEM_PROMPT,
+        systemPrompt: options.systemPrompt ?? SYSTEM_PROMPT,
         model: options.model,
         cwd,
         timeoutMs: options.timeoutMs ?? DEFAULT_TIMEOUT_MS,
+        mode: options.mode ?? 'analyse',
       });
 
       costUsd = addCost(costUsd, reply.costUsd);
