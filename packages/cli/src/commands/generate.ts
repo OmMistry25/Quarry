@@ -44,7 +44,7 @@ export function generateCommand(): Command {
     )
     .option('--max-size-mb <mb>', 'repository size cap', parsePositiveNumber, 200)
     .option('--model <model>', 'model for the agent calls (defaults to the CLI default)')
-    .option('--no-repair', 'fail on the first bad package instead of regenerating once')
+    .option('--no-repair', 'fail on the first bad package instead of repairing it once')
     .option('--json', 'print meta.json instead of a summary', false)
     .action(async (repo: string, options: GenerateOptions) => {
       if (!options.auto && options.surface === undefined) {
@@ -109,8 +109,8 @@ export function generateCommand(): Command {
         onRepair: (failures) => {
           if (options.json) return;
           console.error(
-            `\nS5  verification failed; regenerating once with ${failures.length} problem(s) ` +
-              'fed back',
+            `\nS5  verification failed; repairing the package in place with ` +
+              `${failures.length} problem(s) fed back`,
           );
         },
       });
@@ -123,7 +123,7 @@ export function generateCommand(): Command {
       const files = Object.keys(result.meta).length > 0 ? await listPackage(result.packageDir) : [];
       console.log(`\n${formatPackage(result.meta, files)}`);
       if (result.generations > 1) {
-        console.log(`\nTook ${result.generations} generation attempts (one repair loop).`);
+        console.log(`\nNeeded ${result.generations - 1} repair round(s) after the first attempt.`);
       }
       console.log(
         `\nVerified. Wrote ${result.package.zipPath} (${formatBytes(result.package.bytes)})`,

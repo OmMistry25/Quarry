@@ -48,7 +48,16 @@ export const Meta = z.object({
   generation: z.object({
     startedAt: z.string().datetime(),
     finishedAt: z.string().datetime(),
+    /** JSON-shape retries inside a single generator call, not repair rounds — see `repairs`. */
     attempts: z.number().int().positive(),
+    /**
+     * Repair rounds S6 forced after the package failed verification. Zero on a clean run.
+     * Recorded because an interviewer reading this file should be able to tell that the
+     * package they are about to send out needed fixing, and because a repair costs money
+     * that `costUsd` below has to account for.
+     */
+    repairs: z.number().int().nonnegative().default(0),
+    /** Every agent call the package cost: generation plus any repairs. */
     costUsd: z.number().nonnegative().optional(),
     model: z.string().optional(),
     /** Source files the generator was allowed to read, for auditing invariant 1. */

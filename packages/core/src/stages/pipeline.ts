@@ -103,12 +103,20 @@ export async function generateVerifiedPackage(
 
       // A repair may correct the documented commands, and verification has to use the
       // corrected ones — a wrong test command was one of the failures it exists to fix.
+      //
+      // It also costs an agent call. Folding that into costUsd and counting the round keeps
+      // meta.json honest about what the package took: the first live repair produced a
+      // packaged run whose record claimed one clean generation.
       meta = {
         ...meta,
         generation: {
           ...meta.generation,
           setupCommand: repaired.setupCommand,
           testCommand: repaired.testCommand,
+          repairs: meta.generation.repairs + 1,
+          ...(repaired.costUsd === undefined && meta.generation.costUsd === undefined
+            ? {}
+            : { costUsd: (meta.generation.costUsd ?? 0) + (repaired.costUsd ?? 0) }),
         },
       };
     }
