@@ -258,6 +258,43 @@ and dropping a directory that was never a component.
 - `trpc/trpc` hit the manifest ceiling exactly (40 of them). If a repo needs more than 40
   manifests to be understood, the cap — not the byte budget — is what will bite first.
 
+### CI caught a Node-version trap that local testing could not
+
+Phase 2 merged with red CI (the merge landed before the run finished). The failure:
+
+```
+TypeError: TEXT_ENCODINGS.union is not a function
+  ❯ node_modules/.pnpm/execa@10.0.1/.../encoding-option.js:20:34
+```
+
+`Set.prototype.union` is Node 22+. **execa 10 declares `engines: {node: ">=22"}`**, but pnpm
+does not enforce engine ranges by default, so it installed cleanly, passed every local check
+on a Node 22 dev machine, and broke only on CI's Node 20 — the floor declared in
+`package.json`.
+
+This is precisely what pinning CI to the floor was for, written in the Phase 0 commit as
+"anything that quietly depends on a newer runtime fails in CI instead of on a contributor's
+machine". It worked.
+
+Fixed by downgrading to **execa 9** (`^18.19.0 || >=20.5.0`), keeping the Node 20 floor that
+`architecture-mvp.md` documents. Per CLAUDE.md, architecture wins on implementation, so the
+smallest correct move was to change the dependency rather than the documented floor.
+
+Verified rather than assumed: downloaded Node 20.19.5, reproduced the exact original failure
+on it with execa 10, then confirmed all 190 tests pass on the same Node 20 with execa 9, plus
+a live agent call through the downgraded API.
+
+`engine-strict=true` is now set in `.npmrc`, but be clear about what it does and does not do:
+pnpm checks a dependency's engine range against the **running** Node, not against the floor
+in `package.json`. So it gives a Node 20 user a clear install error instead of a baffling
+runtime crash — but it would **not** have stopped a developer on Node 22 from adding this
+dependency. Only CI-on-the-floor catches that.
+
+**Open question for the maintainer, not decided here:** Node 20 reached end of life in April
+2026, and GitHub is deprecating Node 20 on Actions runners. Keeping the floor at 20 is
+currently costing a major version of one dependency. Raising it to 22 would contradict
+`architecture-mvp.md` as written, so it needs an explicit decision rather than a silent drift.
+
 ### Out-of-scope temptations logged, not built
 
 - _(none yet)_
