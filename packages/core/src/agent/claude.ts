@@ -62,7 +62,6 @@ export type AgentTransport = (invocation: AgentInvocation) => Promise<AgentReply
 function buildArgs(invocation: AgentInvocation): string[] {
   const args = [
     '-p',
-    invocation.prompt,
     '--output-format',
     'json',
     '--system-prompt',
@@ -87,12 +86,20 @@ function buildArgs(invocation: AgentInvocation): string[] {
   return args;
 }
 
+/** Exposed for tests: argument construction is worth asserting, the subprocess is not. */
+export const buildArgsForTest = buildArgs;
+
 export const execaTransport: AgentTransport = async (invocation) => {
   let stdout: string;
 
   try {
     const result = await execa('claude', buildArgs(invocation), {
       cwd: invocation.cwd,
+      // The prompt goes in on stdin, not as an argument. Linux caps a single argv entry at
+      // 128 KB (MAX_ARG_STRLEN), and architecture-mvp.md budgets S5's reference material at
+      // 150 KB alone — so passing it as an argument fails with E2BIG on any repo whose files
+      // are large enough. psf/requests is one; expressjs/express only fitted by luck.
+      input: invocation.prompt,
       timeout: invocation.timeoutMs,
       // Large replies are normal; the default buffer is not generous enough for S5.
       maxBuffer: 64 * 1_024 * 1_024,
