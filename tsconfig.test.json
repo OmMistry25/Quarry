@@ -7,5 +7,6 @@
     "sourceMap": false,
     "types": ["node"]
   },
-  "include": ["packages/*/test/**/*.ts"]
+  "include": ["packages/*/test/**/*.ts"],
+  "exclude": ["packages/*/test/fixtures/**"]
 }

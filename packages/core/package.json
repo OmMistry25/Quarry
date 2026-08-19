@@ -18,5 +18,9 @@
   "scripts": {
     "build": "tsc -b",
     "clean": "tsc -b --clean"
+  },
+  "dependencies": {
+    "simple-git": "^3.36.0",
+    "zod": "^4.4.3"
   }
 }

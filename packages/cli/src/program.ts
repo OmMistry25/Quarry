@@ -1,10 +1,11 @@
 import { Command } from 'commander';
 import { VERSION } from 'core';
 
+import { ingestCommand } from './commands/ingest.js';
+
 /**
  * Subcommands are registered as their pipeline stages land:
- *   ingest (Phase 1) · map (Phase 2) · roles, surfaces (Phase 3) · generate (Phase 5).
- * Until then `quarry --help` describes the tool and exits cleanly.
+ *   ingest (S1) · map (S2) · roles, surfaces (S3–S4) · generate (the whole pipeline).
  */
 export function buildProgram(): Command {
   const program = new Command();
@@ -18,6 +19,8 @@ export function buildProgram(): Command {
     )
     .version(VERSION, '-v, --version', 'print the Quarry version')
     .showHelpAfterError('(run `quarry --help` for usage)');
+
+  program.addCommand(ingestCommand());
 
   return program;
 }

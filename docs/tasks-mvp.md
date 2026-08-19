@@ -9,10 +9,10 @@ Rules: work top to bottom. Check items off in this file as they're completed. Ea
 - ✅ Check: `pnpm test` green on a placeholder test; CLI prints help.
 
 ## Phase 1 — S1 Ingest
-- [ ] Clone (URL, shallow) or copy (local path) into `work/<run>/repo`, size cap enforced
-- [ ] File walk → tree with sizes; exclusions (`.git`, `node_modules`, `.env*`, secret patterns, binaries)
-- [ ] Manifest + language detection → `ingest.json` (zod schema in `schemas/`)
-- [ ] Unit tests with a fixture mini-repo checked into `packages/core/test/fixtures`
+- [x] Clone (URL, shallow) or copy (local path) into `work/<run>/repo`, size cap enforced
+- [x] File walk → tree with sizes; exclusions (`.git`, `node_modules`, `.env*`, secret patterns, binaries)
+- [x] Manifest + language detection → `ingest.json` (zod schema in `schemas/`)
+- [x] Unit tests with a fixture mini-repo checked into `packages/core/test/fixtures`
 - ✅ Check: `quarry ingest <url>` produces valid `ingest.json` on a real public repo.
 
 ## Phase 2 — Agent wrapper + S2 Cartography

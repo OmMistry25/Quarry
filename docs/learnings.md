@@ -102,6 +102,66 @@ Resolved by promoting the Phase 0 tip to `main` and working phase-by-phase from 
 - Setting the repo's default branch is not exposed by the GitHub MCP tools, so that flip is
   a manual step in repo settings.
 
+---
+
+## Phase 1 — S1 Ingest
+
+### Decisions
+
+- **`ingest.json` is metadata only — paths, sizes, counts, no file contents.** Contents are
+  read later, on demand, from the clone still sitting in the run directory. This keeps the
+  artifact small (26 KB for Express) and makes the security story simple: what is not in the
+  tree cannot reach a prompt.
+- **Secret-bearing files are absent from the artifact, not listed.** Only a count survives,
+  so a filename like `stripe-prod.key` never reaches an agent either. The CLI prints the
+  count (`Excluded: 7 secret`) so the strip is visible rather than a silent no-op.
+- **Secret matching deliberately over-excludes.** A missed config file costs an agent a
+  little context; a leaked credential costs the customer their trust in the entire premise.
+  `.env.example`/`.sample`/`.template` are the one carve-out — key names with empty values
+  are genuinely useful stack signal. Verified against `psf/requests`, where all 7 exclusions
+  were real `.key`/`.pem` test certificates.
+- **Lockfiles are listed but never read.** SPEC S1 excludes "lockfile contents"; the path is
+  a stack signal, the 40k lines are not. A missing `loc` field is the marker that a file was
+  never opened.
+- **Language `share` is computed over code only.** Markdown, JSON and YAML are still counted
+  and reported, but with a share of 0 — otherwise a docs-heavy repo reports as a Markdown
+  repo and S3's role scoring would be badly misled.
+- **A local directory is copied into the run dir, not read in place**, so later stages can
+  never mutate someone's working tree and a run directory stays a complete record of itself.
+- **Per-file ceiling of 512 kB** (`too-large`), separate from the 200 MB repo cap. A
+  generated API client or a checked-in dataset would otherwise dominate the walk and every
+  downstream token budget while teaching an agent nothing.
+- **The size cap is checked during the walk, not after**, so an oversized repo fails in
+  seconds. Note the limitation: for a URL the clone still happens first, because knowing the
+  size beforehand would mean a GitHub API call that `architecture-mvp.md` explicitly avoids.
+
+### Bugs caught while building
+
+- **`requirements/dev.txt` was not detected as a manifest.** The basename regex only matched
+  `requirements*.txt`, missing the very common `requirements/` directory layout. Caught by a
+  test written before the fix; the implementation changed, not the expectation.
+- **A local path inside another git checkout was labelled with the enclosing repo's commit.**
+  `git rev-parse HEAD` run in a subdirectory happily reports the parent repo's SHA, so the
+  fixture was being stamped with Quarry's own commit. Now a commit is recorded only when
+  `--show-toplevel` equals the resolved path.
+- **`tsbuildinfo` lived next to `tsconfig.json`, not in `dist/`.** So `rm -rf dist` left
+  stale build state behind and `tsc -b` then insisted everything was up to date while
+  emitting nothing — the CLI binary silently vanished. Both packages now set
+  `tsBuildInfoFile: dist/.tsbuildinfo`. Worth remembering: `pnpm clean` (`tsc -b --clean`)
+  was always correct; hand-deleting `dist` was the trap.
+
+### Noted for later phases
+
+- **Phase 2 needs the curated context builder it already plans for.** `pnpm/pnpm` produces a
+  **1 MB** `ingest.json` with 5,691 files and 1,458 manifests. Feeding that to S2 raw would
+  be both expensive and useless, which is exactly why `architecture-mvp.md` specifies curated
+  context (ingest + README/docs + manifests) rather than the whole tree.
+- **Phase 3 will meet repos whose primary language is out of scope.** `pnpm/pnpm` reports
+  Rust at 62% of code LOC (1,320 real `.rs` files) ahead of TypeScript at 37%. `mvp.md`
+  limits Quarry to TS/JS and Python, so S3's role scorer needs a sensible answer for
+  "the biggest thing here is a language we do not assess" rather than assuming the top
+  language is the relevant one.
+
 ### Out-of-scope temptations logged, not built
 
 - _(none yet)_

@@ -4,6 +4,10 @@
     "composite": true,
     "rootDir": "src",
     "outDir": "dist",
+    // Inside dist, so `rm -rf dist` genuinely resets the build. The default
+    // location is next to tsconfig.json, where it survives and then claims
+    // everything is up to date against output that is no longer there.
+    "tsBuildInfoFile": "dist/.tsbuildinfo",
     "types": ["node"]
   },
   "include": ["src/**/*.ts"]
