@@ -570,6 +570,25 @@ Consequences, applied to this phase:
   there is little proprietary code to protect. Fine — Om is not the customer — but it means a
   demo built on the dogfood repos leaves the pitch's strongest argument unexercised.
 
+### Limitation: the fullstack seam can live inside one component
+
+`formbricks/formbricks` scores Backend STRONG and Frontend STRONG but Fullstack `none`, and
+that is the scorer working as written rather than a bug: it has no `backend-api` component at
+all. Its API routes live *inside* the Next.js `web` app, so S2 correctly maps one
+`frontend-app` plus shared libraries and workers, and the fullstack archetype — which
+requires a `frontend-app` and a `backend-api` to slice across — finds no seam.
+
+A reviewer would reasonably call formbricks a fullstack repo. SPEC defines fullstack as "one
+vertical slice across the seam", and in a Next.js application that seam is real but
+*intra-component*: server actions and route handlers on one side, client components on the
+other. Detecting it means reasoning about the seam inside a component rather than between
+two, which the current kind-based rule cannot do.
+
+Not fixed. It costs nothing on repos with a separate API (`documenso/documenso` scores
+Fullstack STRONG), and the alternative — inferring intra-component seams — is a real piece of
+design rather than a tweak. Worth revisiting if reviewers ask for fullstack tasks on
+Next-style repos.
+
 ### Out-of-scope temptations logged, not built
 
 - _(none yet)_
