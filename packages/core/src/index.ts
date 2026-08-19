@@ -69,6 +69,22 @@ export {
 export { generate, type GenerateOptions, type GenerateResult } from './stages/s5-generate.js';
 export { Meta, META_SCHEMA_VERSION, type VerificationResult } from './schemas/meta.js';
 export {
+  verify,
+  type VerifyOptions,
+  type VerifyReport,
+  type VerifyStep,
+} from './stages/s6-verify.js';
+export { packageRun, zipName, type PackageResult } from './stages/s7-package.js';
+export {
+  generateVerifiedPackage,
+  type GenerateVerifiedOptions,
+  type GenerateVerifiedResult,
+} from './stages/pipeline.js';
+export { checkOverlap, isExemptFromOverlap, SHINGLE_LINES } from './verify/overlap.js';
+export { scanForSecrets } from './verify/gitleaks.js';
+export { checkBugDemonstrable } from './verify/bugDemo.js';
+export { runCommand, scrubbedEnv, INSTALL_TIMEOUT_MS, TEST_TIMEOUT_MS } from './verify/sandbox.js';
+export {
   TASK_ARCHETYPES,
   TASK_IDS,
   SENIORITY_ARCHETYPES,

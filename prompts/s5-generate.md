@@ -44,6 +44,7 @@ interviewer/        never sent to the candidate
   rubric.md
   answer-key.md
   verify.test.<ext> the verification-only test (see below)
+  fix/              the corrected version of every file the fix touches
 ```
 
 Do not create any other top-level directory. Do not write `meta.json` — that is written for
@@ -102,6 +103,22 @@ A single test file that Quarry runs to prove the task is real. It must:
 
 It is never shipped to the candidate. Do not reference it from `candidate/`.
 
+### interviewer/fix/
+
+The answer key describes the fix in prose. This directory contains it as **code**, so the fix
+can be applied mechanically.
+
+For every file the fix changes, write the **complete corrected file** at the same path it has
+inside `candidate/`, but under `interviewer/fix/`. If the bug is in
+`candidate/src/services/booking.ts`, write `interviewer/fix/src/services/booking.ts`
+containing that whole file exactly as it should read once fixed.
+
+Quarry copies `candidate/`, overlays these files on top, and runs `verify.test.<ext>` against
+the result. That test must fail before the overlay and pass after it, so these files must be
+the real fix and nothing else — do not also tidy unrelated code here.
+
+Usually this is one file.
+
 ## Reference material — read for style, copy nothing
 
 {{REFERENCE_MATERIAL}}
@@ -116,10 +133,11 @@ Reply with a single JSON object and nothing else:
   "setupCommand": "npm install",
   "testCommand": "npm test",
   "plantedBugFile": "candidate/src/services/booking.ts",
+  "fixFiles": ["interviewer/fix/src/services/booking.ts"],
   "notes": "anything the reviewer should know"
 }
 ```
 
 `files` lists every file you wrote, relative to your working directory. `setupCommand` and
-`testCommand` are run verbatim from inside `candidate/`. `plantedBugFile` is required for a
-bug hunt.
+`testCommand` are run verbatim from inside `candidate/`. `plantedBugFile` and `fixFiles` are
+both required for a bug hunt.

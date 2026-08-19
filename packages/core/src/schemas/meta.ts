@@ -73,6 +73,12 @@ export const GenerationReply = z.object({
   testCommand: z.string().min(1),
   /** One line naming the planted bug's file, for the answer key cross-check. */
   plantedBugFile: z.string().min(1).optional(),
+  /**
+   * The corrected files under `interviewer/fix/`. S6 overlays these onto a copy of
+   * `candidate/` to prove the planted bug is demonstrable, so the fix has to exist as code
+   * and not only as prose in the answer key.
+   */
+  fixFiles: z.array(z.string().min(1)).optional(),
   notes: z.string().optional(),
 });
 export type GenerationReply = z.infer<typeof GenerationReply>;
