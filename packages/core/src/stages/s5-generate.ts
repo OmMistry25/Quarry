@@ -78,14 +78,6 @@ export async function generate(options: GenerateOptions): Promise<GenerateResult
   const task = taskForSeniority(options.seniority);
   const role = roleArchetype(options.role);
 
-  if (task.id !== 'bug-hunt') {
-    throw new QuarryError(
-      `The ${task.label} archetype is not implemented yet — Phase 4 ships backend x bug-hunt ` +
-        'only (docs/tasks-mvp.md). Use --seniority junior.',
-      { stage: 's5' },
-    );
-  }
-
   const startedAt = options.now ?? new Date();
 
   const reference = await buildReferenceMaterial(
@@ -114,6 +106,17 @@ export async function generate(options: GenerateOptions): Promise<GenerateResult
     BRIEF_STYLE: task.briefStyle,
     RUBRIC_DIMENSIONS: role.rubricDimensions.map((dimension) => `- ${dimension}`).join('\n'),
     ANSWER_KEY_REQUIREMENTS: task.answerKeyRequirements,
+    INTERVIEWER_EXTRAS: task.interviewerExtras.join('\n'),
+    TASK_SPECIFIC_SECTIONS:
+      task.promptSections +
+      (seniority.requiresDesignNote
+        ? '\n### candidate/DESIGN.md\n\n' +
+          'The candidate is also asked for a short design note. Add a `DESIGN.md` to ' +
+          '`candidate/` posing the question — how this change holds up at 10x scale, or under ' +
+          'multi-tenancy — grounded in *this* system rather than in the abstract. Name the ' +
+          'specific table, endpoint or job that would strain first. Ask for half a page, not ' +
+          'an essay, and say so.\n'
+        : ''),
     REFERENCE_MATERIAL: reference.text,
   });
 
@@ -141,7 +144,10 @@ export async function generate(options: GenerateOptions): Promise<GenerateResult
     // Trust the filesystem, not the reply: an agent that says it wrote a file and did not is
     // a failure worth catching here rather than in S6.
     const onDisk = await listFiles(targetDir);
-    await assertPackageShape(onDisk, task.requiresBugDemonstration);
+    await assertPackageShape(onDisk, {
+      requiresVerifyTest: task.requiresBugDemonstration,
+      requiresDesignNote: seniority.requiresDesignNote,
+    });
 
     const packageDir = path.join(options.run.dir, 'package');
     await fs.rm(packageDir, { recursive: true, force: true });
@@ -243,7 +249,10 @@ async function listFiles(root: string): Promise<string[]> {
  * Structural checks S6 should never have to discover. These are cheap and catch the failure
  * modes that make a package unusable rather than merely imperfect.
  */
-async function assertPackageShape(files: string[], requiresVerifyTest: boolean): Promise<void> {
+async function assertPackageShape(
+  files: string[],
+  wants: { requiresVerifyTest: boolean; requiresDesignNote: boolean },
+): Promise<void> {
   const problems: string[] = [];
 
   const has = (predicate: (file: string) => boolean): boolean => files.some(predicate);
@@ -254,12 +263,15 @@ async function assertPackageShape(files: string[], requiresVerifyTest: boolean):
   if (!has((file) => file === 'interviewer/answer-key.md')) {
     problems.push('interviewer/answer-key.md');
   }
-  if (requiresVerifyTest && !has((file) => /^interviewer\/verify\.test\./.test(file))) {
+  if (wants.requiresVerifyTest && !has((file) => /^interviewer\/verify\.test\./.test(file))) {
     problems.push('interviewer/verify.test.*');
   }
   // Without the fix as code, S6 cannot demonstrate the planted bug at all.
-  if (requiresVerifyTest && !has((file) => file.startsWith('interviewer/fix/'))) {
+  if (wants.requiresVerifyTest && !has((file) => file.startsWith('interviewer/fix/'))) {
     problems.push('interviewer/fix/<corrected files>');
+  }
+  if (wants.requiresDesignNote && !has((file) => file === 'candidate/DESIGN.md')) {
+    problems.push('candidate/DESIGN.md');
   }
 
   if (problems.length > 0) {
@@ -284,6 +296,16 @@ async function assertPackageShape(files: string[], requiresVerifyTest: boolean):
     throw new QuarryError(
       `The verification test leaked into candidate/: ${leaked.join(', ')}. It gives the ` +
         'answer away and must stay in interviewer/.',
+      { stage: 's5' },
+    );
+  }
+
+  // An extension has nothing planted, so a fix directory means the generator built the wrong
+  // kind of task — and S6 would have no way to check it.
+  if (!wants.requiresVerifyTest && has((file) => file.startsWith('interviewer/fix/'))) {
+    throw new QuarryError(
+      'This is an extension, but the generator wrote interviewer/fix/ — that belongs to a ' +
+        'bug hunt. The starter must be correct as shipped.',
       { stage: 's5' },
     );
   }

@@ -7,6 +7,10 @@ export function rolesCommand(): Command {
     .description('Show which roles this repo can be assessed for (stages S1 → S3)')
     .argument('<repo>', 'GitHub repo URL, or a path to a local directory')
     .option('--work-dir <dir>', 'root for run directories', 'work')
+    .option(
+      '--resume <runId>',
+      'reuse an existing run\'s artifacts instead of starting over ("latest" for the most recent)',
+    )
     .option('--max-size-mb <mb>', 'repository size cap', parsePositiveNumber, 200)
     .option('--model <model>', 'model for the agent call (defaults to the CLI default)')
     .option('--json', 'print roles.json instead of a table', false)

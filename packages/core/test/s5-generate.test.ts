@@ -263,16 +263,71 @@ describe('S5 package shape checks', () => {
   });
 });
 
-describe('S5 scope gate', () => {
-  it.each(['mid', 'senior'] as const)(
-    'refuses %s until the extension archetype ships',
-    async (seniority) => {
-      const error = await run5(writingTransport(VALID_PACKAGE), { seniority }).catch(
-        (caught: unknown) => caught,
-      );
+/** An extension ships no planted bug, so no verify test and no fix directory. */
+const EXTENSION_PACKAGE: Record<string, string> = Object.fromEntries(
+  Object.entries(VALID_PACKAGE).filter(
+    ([file]) =>
+      !file.startsWith('interviewer/verify.test.') && !file.startsWith('interviewer/fix/'),
+  ),
+);
 
-      expect(error).toBeInstanceOf(QuarryError);
-      expect((error as QuarryError).message).toMatch(/not implemented yet/);
-    },
-  );
+describe('S5 task archetypes', () => {
+  it('junior produces a bug hunt', async () => {
+    const result = await run5(writingTransport(VALID_PACKAGE), { seniority: 'junior' });
+    expect(result.meta.task).toBe('bug-hunt');
+  });
+
+  it('mid produces an extension with no planted-bug apparatus', async () => {
+    const result = await run5(writingTransport(EXTENSION_PACKAGE), { seniority: 'mid' });
+
+    expect(result.meta.task).toBe('extension');
+    expect(result.files.some((file) => file.startsWith('interviewer/fix/'))).toBe(false);
+  });
+
+  it('tells the generator an extension has no planted bug', async () => {
+    const transport = writingTransport(EXTENSION_PACKAGE);
+    await run5(transport, { seniority: 'mid' });
+
+    const prompt = transport.calls[0]?.prompt ?? '';
+    expect(prompt).toMatch(/There is no planted bug/);
+    expect(prompt).toMatch(/ambiguity/);
+    expect(prompt).not.toMatch(/verify\.test/);
+  });
+
+  it('rejects an extension that shipped a fix directory anyway', async () => {
+    // A fix directory means the generator built a bug hunt, and S6 has no way to check it.
+    const error = await run5(writingTransport(VALID_PACKAGE), { seniority: 'mid' }).catch(
+      (caught: unknown) => caught,
+    );
+
+    expect(error).toBeInstanceOf(QuarryError);
+    expect((error as QuarryError).message).toMatch(/belongs to a bug hunt/);
+  });
+
+  it('senior requires a design note', async () => {
+    const error = await run5(writingTransport(EXTENSION_PACKAGE), { seniority: 'senior' }).catch(
+      (caught: unknown) => caught,
+    );
+
+    expect(error).toBeInstanceOf(QuarryError);
+    expect((error as QuarryError).message).toMatch(/candidate\/DESIGN\.md/);
+  });
+
+  it('senior succeeds once the design note is there, and asks about this system', async () => {
+    const withDesign = { ...EXTENSION_PACKAGE, 'candidate/DESIGN.md': '# Design\n' };
+    const transport = writingTransport(withDesign);
+
+    const result = await run5(transport, { seniority: 'senior' });
+
+    expect(result.meta.seniority).toBe('senior');
+    expect(transport.calls[0]?.prompt).toMatch(/10x scale/);
+    expect(transport.calls[0]?.prompt).toMatch(/grounded in \*this\* system/);
+  });
+
+  it('does not ask junior for a design note', async () => {
+    const transport = writingTransport(VALID_PACKAGE);
+    await run5(transport, { seniority: 'junior' });
+
+    expect(transport.calls[0]?.prompt).not.toMatch(/DESIGN\.md/);
+  });
 });

@@ -37,6 +37,10 @@ export function generateCommand(): Command {
     .option('--auto', 'pick the top-scored surface without asking', false)
     .option('--surface <id>', 'generate from a specific surface id')
     .option('--work-dir <dir>', 'root for run directories', 'work')
+    .option(
+      '--resume <runId>',
+      'reuse an existing run\'s artifacts instead of starting over ("latest" for the most recent)',
+    )
     .option('--max-size-mb <mb>', 'repository size cap', parsePositiveNumber, 200)
     .option('--model <model>', 'model for the agent calls (defaults to the CLI default)')
     .option('--no-repair', 'fail on the first bad package instead of regenerating once')

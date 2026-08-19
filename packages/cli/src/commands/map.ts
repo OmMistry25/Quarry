@@ -1,48 +1,22 @@
-import path from 'node:path';
-
 import { Command } from 'commander';
-import { cartography, ingest, type Components } from 'core';
+import { type Components } from 'core';
 
-import { indentDetail, parsePositiveNumber } from './pipeline.js';
+import { mapRepo, parsePositiveNumber, type SharedOptions } from './pipeline.js';
 
 export function mapCommand(): Command {
   return new Command('map')
     .description('Ingest a repo and partition it into components.json (stages S1 → S2)')
     .argument('<repo>', 'GitHub repo URL, or a path to a local directory')
     .option('--work-dir <dir>', 'root for run directories', 'work')
+    .option(
+      '--resume <runId>',
+      'reuse an existing run\'s artifacts instead of starting over ("latest" for the most recent)',
+    )
     .option('--max-size-mb <mb>', 'repository size cap', parsePositiveNumber, 200)
     .option('--model <model>', 'model for the agent call (defaults to the CLI default)')
     .option('--json', 'print components.json instead of a summary', false)
-    .action(async (repo: string, options: MapCommandOptions) => {
-      const ingested = await ingest({
-        ref: repo,
-        workRoot: path.resolve(options.workDir),
-        maxTotalBytes: options.maxSizeMb * 1_000_000,
-        githubToken: process.env.GITHUB_TOKEN,
-      });
-
-      if (!options.json) {
-        console.error(
-          `S1  ${ingested.ingest.repo.fileCount} files, ` +
-            `${ingested.ingest.manifests.length} manifests, ` +
-            `${ingested.ingest.docs.length} docs`,
-        );
-        console.error('S2  mapping components…');
-      }
-
-      const mapped = await cartography({
-        run: ingested.run,
-        ingest: ingested.ingest,
-        ...(options.model === undefined ? {} : { model: options.model }),
-        onAttempt: (attempt) => {
-          if (options.json || attempt.outcome === 'ok') return;
-          // A retry is worth surfacing: it usually means the prompt needs work.
-          console.error(
-            `    attempt ${attempt.attempt} rejected (${attempt.outcome})` +
-              (attempt.detail === undefined ? '' : `\n${indentDetail(attempt.detail)}`),
-          );
-        },
-      });
+    .action(async (repo: string, options: SharedOptions) => {
+      const mapped = await mapRepo(repo, options);
 
       if (options.json) {
         console.log(JSON.stringify(mapped.components, null, 2));
@@ -50,15 +24,8 @@ export function mapCommand(): Command {
       }
 
       console.log(`\n${formatComponents(mapped.components)}`);
-      console.log(`\nWrote ${mapped.artifactPath}`);
+      console.log(`\nWrote ${mapped.run.dir}/components.json`);
     });
-}
-
-interface MapCommandOptions {
-  workDir: string;
-  maxSizeMb: number;
-  model?: string;
-  json: boolean;
 }
 
 export function formatComponents(artifact: Components): string {

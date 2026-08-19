@@ -43,8 +43,7 @@ candidate/          the starter repo the candidate receives
 interviewer/        never sent to the candidate
   rubric.md
   answer-key.md
-  verify.test.<ext> the verification-only test (see below)
-  fix/              the corrected version of every file the fix touches
+{{INTERVIEWER_EXTRAS}}
 ```
 
 Do not create any other top-level directory. Do not write `meta.json` — that is written for
@@ -92,32 +91,7 @@ covers the boundary at exactly zero" is what a reviewer can actually grade again
 Then **5–8 debrief questions** to ask in a follow-up conversation — the kind that separate
 someone who understood the change from someone who pattern-matched their way to it.
 
-### interviewer/verify.test.<ext>
-
-A single test file that Quarry runs to prove the task is real. It must:
-
-- **Fail** against `candidate/` as shipped.
-- **Pass** once the fix described in the answer key is applied.
-- Use the same test framework as `candidate/`, and import from `candidate/` by relative path
-  as though it were placed inside the candidate project's test directory.
-
-It is never shipped to the candidate. Do not reference it from `candidate/`.
-
-### interviewer/fix/
-
-The answer key describes the fix in prose. This directory contains it as **code**, so the fix
-can be applied mechanically.
-
-For every file the fix changes, write the **complete corrected file** at the same path it has
-inside `candidate/`, but under `interviewer/fix/`. If the bug is in
-`candidate/src/services/booking.ts`, write `interviewer/fix/src/services/booking.ts`
-containing that whole file exactly as it should read once fixed.
-
-Quarry copies `candidate/`, overlays these files on top, and runs `verify.test.<ext>` against
-the result. That test must fail before the overlay and pass after it, so these files must be
-the real fix and nothing else — do not also tidy unrelated code here.
-
-Usually this is one file.
+{{TASK_SPECIFIC_SECTIONS}}
 
 ## Reference material — read for style, copy nothing
 
@@ -140,4 +114,4 @@ Reply with a single JSON object and nothing else:
 
 `files` lists every file you wrote, relative to your working directory. `setupCommand` and
 `testCommand` are run verbatim from inside `candidate/`. `plantedBugFile` and `fixFiles` are
-both required for a bug hunt.
+required for a bug hunt and omitted for an extension.
