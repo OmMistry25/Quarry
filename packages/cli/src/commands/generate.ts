@@ -16,6 +16,7 @@ import {
   indentDetail,
   mapRepo,
   parsePositiveNumber,
+  reusableSurfaces,
   type SharedOptions,
 } from './pipeline.js';
 
@@ -58,15 +59,10 @@ export function generateCommand(): Command {
 
       assertRoleSupported(mapped.roles, options.role);
 
-      // A resumed run that already picked surfaces for this role reuses them; S4 is an agent
-      // call, and re-paying for it while iterating on generation is the whole thing --resume
-      // exists to avoid.
-      const reusable =
-        mapped.surfaces !== undefined && mapped.surfaces.role === options.role
-          ? mapped.surfaces
-          : undefined;
+      const reusable = reusableSurfaces(mapped.surfaces, options.role);
 
-      if (!options.json && reusable === undefined) console.error('S4  selecting surfaces…');
+      if (!options.json)
+        console.error(reusable === undefined ? 'S4  selecting surfaces…' : 'S4  reused');
 
       const selected =
         reusable !== undefined
