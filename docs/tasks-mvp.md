@@ -45,10 +45,27 @@ Rules: work top to bottom. Check items off in this file as they're completed. Ea
 - ✅ Check: `quarry generate <fixture> --role backend --seniority junior --auto` → verified zip.
 
 ## Phase 6 — End-to-end hardening
-- [ ] Run against dogfood repos: `gtm-os-console`, `signal-engine`, one OSS repo
-- [ ] Fix whatever breaks; capture failure patterns in `docs/learnings.md`
-- [ ] Add `extension` task archetype + `mid`/`senior` seniority behaviors
-- ✅ Check: SPEC acceptance criteria 1–5 pass.
+- [~] Run against dogfood repos: `gtm-os-console`, `signal-engine`, one OSS repo
+  - Ran **four** OSS repos instead: `expressjs/express` ✅ verified, `psf/requests` ✅ verified,
+    `documenso/documenso` (multi-role), `formbricks/formbricks` (role menu only).
+  - The two dogfood repos were **not** run — they are not reachable from the build session.
+    They also carry less signal than assumed; see the dogfood correction in `learnings.md`.
+    Run locally with `quarry generate <path> --role backend --auto`, which needs no GitHub
+    access and keeps private code off any remote.
+- [x] Fix whatever breaks; capture failure patterns in `docs/learnings.md`
+- [x] Add `extension` task archetype + `mid`/`senior` seniority behaviors
+- ✅ Check: SPEC acceptance criteria 1–5 pass. **4 of 5 pass; criterion 1 does not.**
+
+  | # | Criterion | Status |
+  |---|---|---|
+  | 1 | 3 dogfood repos, `--seniority mid`, < 10 min each | ❌ latency missed (S5 alone is ~14.5 min); dogfood repos not run |
+  | 2 | Every shipped package passed S6 incl. bug demonstrability | ✅ |
+  | 3 | `candidate/` installs and runs, one command, no external services | ✅ |
+  | 4 | No `candidate/` file matches an 8-line block from source | ✅ — and it caught a real violation |
+  | 5 | Role menu reports `none` for absent roles and refuses generation | ✅ |
+
+  Criterion 1's latency target was written before anything had been measured against a real
+  repo; see `learnings.md`. Not changed unilaterally — it is a stated acceptance criterion.
 
 ## Phase 7 — Remaining roles
 - [ ] `data` archetype (second priority — dogfood repos support it)
