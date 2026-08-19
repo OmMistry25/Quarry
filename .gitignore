@@ -23,6 +23,11 @@ pnpm-debug.log*
 .env
 .env.*
 !.env.example
+
+# ...except inside the ingest fixture, which ships a deliberately fake .env so the
+# secret-stripping tests have something to strip. It grants access to nothing.
+!packages/core/test/fixtures/**/.env
+!packages/core/test/fixtures/**/.env.*
 *.pem
 *.key
 id_rsa*

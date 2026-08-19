@@ -8,3 +8,7 @@ pnpm-lock.yaml
 # Reformatting them creates noise in documents Quarry's author owns.
 docs/
 CLAUDE.md
+
+# Test fixtures stand in for other people's repos — formatting them to our house style
+# would defeat the point and churn the byte sizes the ingest tests assert on.
+packages/core/test/fixtures/
