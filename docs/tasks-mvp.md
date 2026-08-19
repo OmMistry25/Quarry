@@ -22,10 +22,10 @@ Rules: work top to bottom. Check items off in this file as they're completed. Ea
 - ✅ Check: `quarry map <url>` emits sane `components.json` for (a) a single-app repo and (b) a monorepo.
 
 ## Phase 3 — S3 Role menu + S4 Surface selection
-- [ ] Deterministic role scorer (pure function + unit tests) → `roles.json`
-- [ ] Hard error on `none` roles with reason
-- [ ] `prompts/s4-surfaces.md`; context scoped to in-lane component files → `surfaces.json`
-- [ ] `--auto` picks top-scored surface
+- [x] Deterministic role scorer (pure function + unit tests) → `roles.json`
+- [x] Hard error on `none` roles with reason
+- [x] `prompts/s4-surfaces.md`; context scoped to in-lane component files → `surfaces.json`
+- [x] `--auto` picks top-scored surface
 - ✅ Check: `quarry roles <url>` prints the role card table; `quarry surfaces <url> --role backend` lists 3–5 surfaces with scores.
 
 ## Phase 4 — S5 Generation (backend × bug-hunt only)

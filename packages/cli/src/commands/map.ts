@@ -1,7 +1,9 @@
 import path from 'node:path';
 
-import { Command, InvalidArgumentError } from 'commander';
+import { Command } from 'commander';
 import { cartography, ingest, type Components } from 'core';
+
+import { indentDetail, parsePositiveNumber } from './pipeline.js';
 
 export function mapCommand(): Command {
   return new Command('map')
@@ -35,7 +37,10 @@ export function mapCommand(): Command {
         onAttempt: (attempt) => {
           if (options.json || attempt.outcome === 'ok') return;
           // A retry is worth surfacing: it usually means the prompt needs work.
-          console.error(`    attempt ${attempt.attempt} rejected (${attempt.outcome})`);
+          console.error(
+            `    attempt ${attempt.attempt} rejected (${attempt.outcome})` +
+              (attempt.detail === undefined ? '' : `\n${indentDetail(attempt.detail)}`),
+          );
         },
       });
 
@@ -54,14 +59,6 @@ interface MapCommandOptions {
   maxSizeMb: number;
   model?: string;
   json: boolean;
-}
-
-function parsePositiveNumber(value: string): number {
-  const parsed = Number(value);
-  if (!Number.isFinite(parsed) || parsed <= 0) {
-    throw new InvalidArgumentError('must be a positive number');
-  }
-  return parsed;
 }
 
 export function formatComponents(artifact: Components): string {

@@ -295,6 +295,87 @@ dependency. Only CI-on-the-floor catches that.
 currently costing a major version of one dependency. Raising it to 22 would contradict
 `architecture-mvp.md` as written, so it needs an explicit decision rather than a silent drift.
 
+---
+
+## Phase 3 — S3 Role menu + S4 Surface selection
+
+### The Rust question, answered
+
+Phase 1 flagged that `pnpm/pnpm` reports Rust at 62% of code LOC while `mvp.md` scopes Quarry
+to TS/JS and Python. The resolution: **role scoring counts only assessable-language LOC**, and
+when in-lane components exist but are dominated by a language Quarry cannot generate a
+take-home in, the rating is `none` with a reason that names the language — not `weak`. A
+verdict of "weak" would imply "try anyway"; the truth is "this repo has a substantial backend
+and Quarry still cannot help with it".
+
+### A scoring bug caught by running against a real repo
+
+`expressjs/express` scored **Backend WEAK, "no tests found"** — for one of the better-tested
+repos in the ecosystem. S2 had mapped it correctly: `lib/**` as the backend component, and a
+separate `other` component holding `test/**` with 112 files and 13,501 lines. The scorer only
+counted files inside *in-lane* components, so the entire test suite was invisible.
+
+That layout — a top-level `test/` beside `lib/` or `src/` — is standard in Python and common
+in JS, so this systematically under-rated exactly the repos that make the best assessments.
+Fixed by also counting test files that sit in a **neutral** component (`other`, `docs`,
+`infra`) or in no component at all, while still excluding tests inside *another role's* lane
+so a frontend suite cannot make a backend look well tested. Express now scores **STRONG,
+15,834 assessable loc, 85% of it tests** — which is accurate; express really does have more
+test code than library code.
+
+### Decisions
+
+- **Test coverage is the most heavily weighted signal** (35 of 100). A bug-hunt task needs
+  somewhere for a candidate's test to live, and a repo with no tests gives the generator no
+  conventions to imitate.
+- **Isolation is the most heavily weighted surface score** (0.4 of 1.0). A surface that cannot
+  be lifted out without dragging three components with it fails the one-command-setup
+  invariant no matter how interesting it is.
+- **Ranking happens in Quarry, not in the agent.** The agent returns three scores per surface;
+  the weighting and sort are code, so `--auto` is reproducible and the weighting is
+  inspectable. `--auto` resolves through the same `pickSurface()` that S5 will call rather
+  than assuming the top of the printed list.
+- **S4 validates ids and paths against reality inside the zod schema.** A hallucinated file
+  path or a component id that is not in-lane becomes a retry with a specific complaint, not a
+  broken S5 input.
+- **Fullstack requires both sides of the seam.** A repo with only an API supports backend, not
+  fullstack — SPEC describes fullstack as "one vertical slice across the seam".
+- **S4's context is shaped differently from S2's, deliberately.** Cartography needed to know
+  what exists, so it got manifests and prose. Surface selection has to judge isolation and
+  richness, which cannot be told from a directory listing — so it spends its budget on source
+  code, ranked entrypoints first, then tests, then by size.
+- **Component path globs are matched forgivingly.** `trpc/trpc` really produced
+  `["www/**", "!www/og-image/**"]`, and agents drop trailing `/**` from bare directories
+  routinely. Both are handled; a component with only exclusions matches nothing rather than
+  everything.
+
+### The retry path fired for real, and I could not see why
+
+An S4 run on the fixture rejected attempt 1 with `schema-mismatch` — the first real retry
+outside a unit test. The reason existed only in memory and the run was not reproducible, so
+**what failed is unknown**. That gap is now closed: every agent attempt, with its full
+rejection detail, is appended to `work/<run>/logs/agent.log`, and the CLI prints the reason
+rather than just the outcome. Worth watching in Phase 4, since a rejected attempt is the most
+useful signal there is for improving a prompt.
+
+### Observed costs
+
+| Command | Repo | Cost | Wall clock |
+|---|---|---|---|
+| `roles` (S1–S3) | `expressjs/express` | ~$0.15 | 16 s |
+| `surfaces` (S1–S4) | fixture | ~$0.10 | 40 s |
+| `surfaces` (S1–S4) | `expressjs/express` | ~$0.23 | 76 s |
+
+S3 itself is free — it is a pure function, so the same inputs always produce the same menu.
+
+### Noted for later phases
+
+- **Every command re-runs the whole pipeline.** `quarry surfaces` pays for S2 again even when
+  a run directory with a perfectly good `components.json` already exists.
+  `architecture-mvp.md` anticipates this with `--from s5` resumability; it is not built yet,
+  and it will start to hurt during Phase 4 iteration.
+- The `--json-schema` CLI flag remains unused, as recorded in Phase 2.
+
 ### Out-of-scope temptations logged, not built
 
 - _(none yet)_

@@ -35,6 +35,8 @@ pnpm build         # compile packages/core and packages/cli
 
 pnpm --filter cli dev -- --help
 pnpm --filter cli dev -- map https://github.com/owner/repo
+pnpm --filter cli dev -- roles https://github.com/owner/repo
+pnpm --filter cli dev -- surfaces https://github.com/owner/repo --role backend --auto
 ```
 
 Agent-stage tests run against recorded replies by default. `LIVE=1 pnpm test` runs them

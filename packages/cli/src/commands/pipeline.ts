@@ -1,0 +1,115 @@
+import path from 'node:path';
+
+import { InvalidArgumentError } from 'commander';
+import {
+  cartography,
+  ingest,
+  roleMenu,
+  type Components,
+  type Ingest,
+  type RunDir,
+  type Roles,
+} from 'core';
+
+/** Options shared by every command that has to get a repo mapped before it can do its job. */
+export interface SharedOptions {
+  workDir: string;
+  maxSizeMb: number;
+  model?: string;
+  json: boolean;
+}
+
+export function parsePositiveNumber(value: string): number {
+  const parsed = Number(value);
+  if (!Number.isFinite(parsed) || parsed <= 0) {
+    throw new InvalidArgumentError('must be a positive number');
+  }
+  return parsed;
+}
+
+export interface MappedRepo {
+  run: RunDir;
+  ingest: Ingest;
+  components: Components;
+  roles: Roles;
+}
+
+/**
+ * S1 → S2 → S3. Every command below `ingest` needs all three, and S3 is free, so the role
+ * menu is always computed rather than being its own opt-in step.
+ */
+export async function mapRepo(repo: string, options: SharedOptions): Promise<MappedRepo> {
+  const log = (message: string): void => {
+    if (!options.json) console.error(message);
+  };
+
+  const ingested = await ingest({
+    ref: repo,
+    workRoot: path.resolve(options.workDir),
+    maxTotalBytes: options.maxSizeMb * 1_000_000,
+    githubToken: process.env.GITHUB_TOKEN,
+  });
+
+  log(
+    `S1  ${ingested.ingest.repo.fileCount} files, ` +
+      `${ingested.ingest.manifests.length} manifests, ${ingested.ingest.docs.length} docs`,
+  );
+  log('S2  mapping components…');
+
+  const mapped = await cartography({
+    run: ingested.run,
+    ingest: ingested.ingest,
+    ...(options.model === undefined ? {} : { model: options.model }),
+    onAttempt: (attempt) => {
+      if (attempt.outcome === 'ok') return;
+      log(
+        `    attempt ${attempt.attempt} rejected (${attempt.outcome})` +
+          (attempt.detail === undefined ? '' : `\n${indentDetail(attempt.detail)}`),
+      );
+    },
+  });
+
+  log(`S3  scoring roles over ${mapped.components.components.length} component(s)…`);
+
+  const scored = await roleMenu({
+    run: ingested.run,
+    ingest: ingested.ingest,
+    components: mapped.components,
+  });
+
+  return {
+    run: ingested.run,
+    ingest: ingested.ingest,
+    components: mapped.components,
+    roles: scored.roles,
+  };
+}
+
+/** Keep a rejection reason readable in a terminal without drowning the progress output. */
+export function indentDetail(detail: string, maxLines = 6): string {
+  const lines = detail.split('\n');
+  const shown = lines.slice(0, maxLines).map((line) => `      ${line}`);
+  if (lines.length > maxLines) shown.push(`      … ${lines.length - maxLines} more`);
+  return shown.join('\n');
+}
+
+export function formatRoles(artifact: Roles): string {
+  const badge: Record<string, string> = {
+    strong: 'STRONG',
+    good: 'GOOD  ',
+    weak: 'WEAK  ',
+    none: 'NONE  ',
+  };
+
+  const rows = artifact.roles.map((card) => {
+    const evidence =
+      card.rating === 'none'
+        ? ''
+        : `  [${card.evidence.assessableLoc.toLocaleString('en-US')} loc, ` +
+          `${card.evidence.componentIds.length} component(s)]`;
+
+    return `${card.label.padEnd(11)} ${badge[card.rating] ?? card.rating}  ${card.reason}${evidence}`;
+  });
+
+  return rows.join('\n');
+}
