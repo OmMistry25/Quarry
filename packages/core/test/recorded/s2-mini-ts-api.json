@@ -1,0 +1,15 @@
+{
+  "components": [
+    {
+      "id": "mini-ts-api",
+      "kind": "backend-api",
+      "paths": ["**"],
+      "stack": ["typescript", "express", "sqlite", "better-sqlite3", "zod", "vitest", "supertest"],
+      "entrypoints": ["src/index.ts"],
+      "depends_on": [],
+      "docs": ["README.md", "docs/architecture.md"],
+      "confidence": 0.95,
+      "notes": "Single small Express+SQLite inventory API; routes/services/db are internal layers, not separate components. Vitest+supertest tests in test/."
+    }
+  ]
+}

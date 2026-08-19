@@ -34,7 +34,11 @@ pnpm typecheck     # tsc across packages and tests
 pnpm build         # compile packages/core and packages/cli
 
 pnpm --filter cli dev -- --help
+pnpm --filter cli dev -- map https://github.com/owner/repo
 ```
+
+Agent-stage tests run against recorded replies by default. `LIVE=1 pnpm test` runs them
+against the real `claude` CLI instead — slower, and it spends real tokens.
 
 CI runs `typecheck`, `lint`, `format:check` and `test` on every pull request and on pushes
 to `main`, against Node 20 (the floor declared in `engines`).

@@ -2,6 +2,7 @@ import { Command } from 'commander';
 import { VERSION } from 'core';
 
 import { ingestCommand } from './commands/ingest.js';
+import { mapCommand } from './commands/map.js';
 
 /**
  * Subcommands are registered as their pipeline stages land:
@@ -21,6 +22,7 @@ export function buildProgram(): Command {
     .showHelpAfterError('(run `quarry --help` for usage)');
 
   program.addCommand(ingestCommand());
+  program.addCommand(mapCommand());
 
   return program;
 }
