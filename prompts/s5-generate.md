@@ -27,6 +27,27 @@ Concretely:
 The pitch for this product is "your codebase, zero IP exposure". A single copied block breaks
 that. When in doubt, write it differently.
 
+**Where this actually goes wrong is framework boilerplate.** Not the interesting logic — you
+rewrite that naturally — but the stereotyped glue around it: form submit handlers, router
+setup, error middleware, test harness scaffolding, provider wrappers. Idiomatic code
+converges, so when you reach for the obvious shape you often reproduce the reference exactly.
+A real violation caught in testing looked like this:
+
+```
+const handleFormSubmit = form.handleSubmit(async (data) => {
+  try {
+    await onFormSubmit(data);
+  } catch {
+    return;
+  }
+  form.reset(form.getValues());
+```
+
+Nothing there is wrong, and every line is idiomatic — which is the trap. When you write the
+stereotyped part, deliberately make a different choice: name the callback something else,
+handle the error rather than swallowing it, reorder independent statements, extract or inline
+where the source did the opposite. Same behaviour, your own hand.
+
 ## What you are building
 
 {{TASK_BRIEF}}

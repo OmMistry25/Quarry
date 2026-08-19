@@ -218,7 +218,11 @@ function taskBrief(
       : '\n\n## A previous attempt at this package failed verification\n\n' +
         'Quarry installed the last attempt, ran its tests, and checked it. These are the ' +
         'problems it found. Write the package again from scratch, avoiding all of them:\n\n' +
-        priorFailures.map((failure) => `- ${failure}`).join('\n\n');
+        priorFailures.map((failure) => `- ${failure}`).join('\n\n') +
+        '\n\nEvery other check still applies. A previous attempt has already failed by fixing ' +
+        'the reported problem and, in the process, copying a block of the reference material ' +
+        'verbatim — trading one failure for another. Fix what is listed **and** keep ' +
+        'everything above, the synthesis rule first among them.';
 
   return (
     `A **${taskLabel}** for a **${roleLabel}** candidate, built around this surface from the ` +

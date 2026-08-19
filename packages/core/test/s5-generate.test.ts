@@ -331,3 +331,27 @@ describe('S5 task archetypes', () => {
     expect(transport.calls[0]?.prompt).not.toMatch(/DESIGN\.md/);
   });
 });
+
+describe('repair prompts', () => {
+  it('restates the other invariants, not just the reported failure', async () => {
+    // A repair against documenso fixed the reported problem and copied a block of the
+    // reference verbatim doing it — trading one failure for another. Attempt 1 had been
+    // overlap-clean.
+    const transport = writingTransport(VALID_PACKAGE);
+
+    await run5(transport, { priorFailures: ['`npm test` failed: something broke'] });
+
+    const prompt = transport.calls[0]?.prompt ?? '';
+    expect(prompt).toMatch(/previous attempt at this package failed verification/);
+    expect(prompt).toMatch(/something broke/);
+    expect(prompt).toMatch(/Every other check still applies/);
+    expect(prompt).toMatch(/synthesis rule first among them/);
+  });
+
+  it('says nothing about repairs on a first attempt', async () => {
+    const transport = writingTransport(VALID_PACKAGE);
+    await run5(transport);
+
+    expect(transport.calls[0]?.prompt).not.toMatch(/previous attempt/);
+  });
+});

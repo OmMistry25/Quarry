@@ -589,6 +589,47 @@ Fullstack STRONG), and the alternative — inferring intra-component seams — i
 design rather than a tweak. Worth revisiting if reviewers ask for fullstack tasks on
 Next-style repos.
 
+### Invariant 1 fired on real output — the most important result so far
+
+Generating a **frontend** package from `documenso/documenso`, the overlap check rejected the
+package for reproducing source code verbatim:
+
+```
+src/components/widget-preferences-form.tsx:127 <- apps/remix/.../branding-preferences-form.tsx:187
+
+  const handleFormSubmit = form.handleSubmit(async (data) => {
+    try {
+      await onFormSubmit(data);
+    } catch {
+      return;
+    }
+    form.reset(form.getValues());
+```
+
+That is genuine copying rather than shared idiom: the `onFormSubmit` name, the bare
+`catch { return; }`, and `form.reset(form.getValues())` in that exact sequence. A different
+author writes it differently.
+
+This matters more than any other single result in the project. The entire pitch — "your
+codebase, zero IP exposure" — rests on that check, and until now it had only ever been proved
+against a synthetic fixture. It caught a real violation and refused to package. It is not
+theoretical, and the generator does sometimes copy.
+
+Two things follow.
+
+**Framework boilerplate is where copying happens.** Not the interesting logic, which gets
+rewritten naturally, but the stereotyped glue: submit handlers, router setup, error
+middleware, provider wrappers, test scaffolding. Idiomatic code converges, so reaching for the
+obvious shape reproduces the reference exactly. The prompt now names this specifically, shows
+the real violation as an example, and asks for a deliberately different choice in exactly
+those places. Per CLAUDE.md invariant 1, the fix goes in generation, not the check.
+
+**The repair loop degraded synthesis while chasing the reported failure.** Attempt 1 was
+overlap-clean; the copying appeared in attempt 2, which was fixing a bug-demonstrability
+problem. Under pressure to fix what it was told about, the generator leaned harder on the
+reference material. The repair block now restates that every other check still applies and
+names the synthesis rule first — fix what is listed *and* keep everything else.
+
 ### Out-of-scope temptations logged, not built
 
 - _(none yet)_
