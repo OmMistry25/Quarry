@@ -21,6 +21,8 @@ export interface TaskArchetype {
   answerKeyRequirements: string;
   /** Whether S6 needs a verification-only test that fails on the starter. */
   requiresBugDemonstration: boolean;
+  /** Archetype-specific instructions on constructing the task itself. Empty for extension. */
+  plantingGuidance?: string;
   /** Extra `interviewer/` entries, rendered into the package layout in the S5 prompt. */
   interviewerExtras: readonly string[];
   /** Archetype-specific prompt sections, appended after the shared ones. */
@@ -35,6 +37,32 @@ export const TASK_ARCHETYPES: Readonly<Record<TaskId, TaskArchetype>> = {
       'An incident report, written the way a support escalation or an on-call handover reads: ' +
       'observed behaviour, what was expected, how to reproduce. It states the symptom and ' +
       'never the cause, never names the file, and never uses the word "bug" as a pointer.',
+    /**
+     * Written after watching two of three generations plant a bug their own shipped tests
+     * caught. The generator writes a thorough suite for the behaviour it just built, then
+     * breaks some of that behaviour — and the two collide. Telling it the rule is not enough;
+     * it needs the order of operations and a check it can actually perform.
+     */
+    plantingGuidance: `## Planting the bug
+
+Do this **last**, and in this order:
+
+1. Write \`candidate/\` correct and complete, with its tests, and satisfy yourself the suite
+   would pass.
+2. Re-read your own test files and list what they actually assert.
+3. Only then plant the bug — in a behaviour **none of those assertions cover**.
+
+The shipped suite must pass against the planted bug. This is checked mechanically and it is
+the single most common reason a package is rejected: if \`npm test\` fails out of the box, the
+candidate finds the bug in one command and there is no hunt.
+
+That does not mean writing a thin suite. Write the tests a competent team would, then choose
+somewhere they do not reach: an edge case one step beyond what is asserted, an ordering that
+only matters for input the tests do not use, a boundary the suite approaches but never lands
+on. If your tests check a 3-unit and a 5-unit adjustment, the exact-zero case is still open.
+
+Before you finish, name to yourself the test that would have caught your bug. If one exists,
+you have planted it in the wrong place.`,
     answerKeyRequirements:
       'The planted bug: where it is, what it does, and why a competent engineer could ' +
       'plausibly have written it. The fix. The test the candidate should add.',

@@ -108,6 +108,7 @@ export async function generate(options: GenerateOptions): Promise<GenerateResult
     ANSWER_KEY_REQUIREMENTS: task.answerKeyRequirements,
     INTERVIEWER_EXTRAS: task.interviewerExtras.join('\n'),
     TASK_SPECIFIC_SECTIONS:
+      (task.plantingGuidance === undefined ? '' : `${task.plantingGuidance}\n\n`) +
       task.promptSections +
       (seniority.requiresDesignNote
         ? '\n### candidate/DESIGN.md\n\n' +
