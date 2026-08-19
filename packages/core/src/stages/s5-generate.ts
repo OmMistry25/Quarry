@@ -45,6 +45,12 @@ export interface GenerateOptions {
   retries?: number;
   now?: Date;
   onAttempt?: (attempt: AgentAttempt) => void;
+  /**
+   * Failures from a previous verification run. SPEC S6 allows one repair loop; rather than
+   * asking the generator to patch code it can no longer see, the whole package is written
+   * again with an explicit account of what went wrong last time.
+   */
+  priorFailures?: readonly string[];
 }
 
 export interface GenerateResult {
@@ -97,7 +103,13 @@ export async function generate(options: GenerateOptions): Promise<GenerateResult
   }
 
   const prompt = await renderPrompt('s5-generate.md', {
-    TASK_BRIEF: taskBrief(options.surface, role.label, task.label, seniority.extraScope),
+    TASK_BRIEF: taskBrief(
+      options.surface,
+      role.label,
+      task.label,
+      seniority.extraScope,
+      options.priorFailures ?? [],
+    ),
     STUB_STRATEGY: role.stubStrategy,
     BRIEF_STYLE: task.briefStyle,
     RUBRIC_DIMENSIONS: role.rubricDimensions.map((dimension) => `- ${dimension}`).join('\n'),
@@ -181,7 +193,16 @@ function taskBrief(
   roleLabel: string,
   taskLabel: string,
   extraScope: string,
+  priorFailures: readonly string[],
 ): string {
+  const repair =
+    priorFailures.length === 0
+      ? ''
+      : '\n\n## A previous attempt at this package failed verification\n\n' +
+        'Quarry installed the last attempt, ran its tests, and checked it. These are the ' +
+        'problems it found. Write the package again from scratch, avoiding all of them:\n\n' +
+        priorFailures.map((failure) => `- ${failure}`).join('\n\n');
+
   return (
     `A **${taskLabel}** for a **${roleLabel}** candidate, built around this surface from the ` +
     `source repository:\n\n` +
@@ -195,7 +216,8 @@ function taskBrief(
     "The starter repo's own tests must **pass** against the planted bug. A bug the shipped " +
     'test suite already catches is not a bug hunt — the candidate would find it by running ' +
     '`npm test` once.' +
-    (extraScope === '' ? '' : `\n\n${extraScope}`)
+    (extraScope === '' ? '' : `\n\n${extraScope}`) +
+    repair
   );
 }
 
@@ -234,6 +256,10 @@ async function assertPackageShape(files: string[], requiresVerifyTest: boolean):
   }
   if (requiresVerifyTest && !has((file) => /^interviewer\/verify\.test\./.test(file))) {
     problems.push('interviewer/verify.test.*');
+  }
+  // Without the fix as code, S6 cannot demonstrate the planted bug at all.
+  if (requiresVerifyTest && !has((file) => file.startsWith('interviewer/fix/'))) {
+    problems.push('interviewer/fix/<corrected files>');
   }
 
   if (problems.length > 0) {

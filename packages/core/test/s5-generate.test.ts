@@ -96,6 +96,9 @@ const VALID_PACKAGE: Record<string, string> = {
   'interviewer/rubric.md': '# Rubric\n',
   'interviewer/answer-key.md': '# Answer key\n',
   'interviewer/verify.test.ts': 'it("fails on starter", () => {});\n',
+  // The fix as code, not just prose in the answer key — S6 overlays this to prove the
+  // planted bug is demonstrable.
+  'interviewer/fix/src/services/inventory.ts': 'export const adjust = () => 0;\n',
 };
 
 async function run5(
@@ -210,13 +213,24 @@ describe('S5 package shape checks', () => {
     expect((error as QuarryError).stage).toBe('s5');
   });
 
+  it('fails when interviewer/fix/ is missing, since S6 could not then prove the bug', async () => {
+    const files = { ...VALID_PACKAGE };
+    delete files['interviewer/fix/src/services/inventory.ts'];
+
+    const error = await run5(writingTransport(files)).catch((caught: unknown) => caught);
+
+    expect(error).toBeInstanceOf(QuarryError);
+    expect((error as QuarryError).message).toMatch(/interviewer\/fix/);
+  });
+
   it('fails when candidate/ is too thin to be a real repo', async () => {
     const files = {
       'candidate/README.md': '#\n',
       'candidate/BRIEF.md': '#\n',
       'interviewer/rubric.md': '#\n',
       'interviewer/answer-key.md': '#\n',
-      'interviewer/verify.test.ts': '\n',
+      'interviewer/verify.test.ts': 'x\n',
+      'interviewer/fix/src/a.ts': 'x\n',
     };
 
     const error = await run5(writingTransport(files)).catch((caught: unknown) => caught);
