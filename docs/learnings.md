@@ -630,6 +630,35 @@ problem. Under pressure to fix what it was told about, the generator leaned hard
 reference material. The repair block now restates that every other check still applies and
 names the synthesis rule first — fix what is listed *and* keep everything else.
 
+### Bug-hunt is a structurally poor fit for the frontend role
+
+Three frontend generations against `documenso/documenso` were rejected for the same reason:
+the starter's own suite catches the planted bug, so the candidate would find it by running
+the tests once. The third failed with **20 of its own tests failing**, after the planting
+guidance had been added and had visibly worked on backend repos.
+
+This is not a prompt problem. It is a difference in how the two kinds of test suite cover
+behaviour:
+
+- **Backend tests assert input/output pairs.** express's suite checked specific byte lengths
+  and content types, which leaves gaps between assertions — the exact-zero case, the
+  multi-byte body, the boundary nobody wrote a test for. A realistic bug fits in a gap.
+- **Component tests assert observable UI state, broadly.** "hides the sticky bar until a
+  field is edited", "disables the fields while branding is off", "offers an inherit option
+  only for a scope that can inherit". A React form's suite covers rendered state so densely
+  that almost any component bug changes something a test already asserts.
+
+The generator is not being careless; there is very little room to plant in.
+
+The design already carries the remedy: seniority is a scope knob, and `mid` selects the
+**extension** archetype, which plants nothing. Frontend work is better assessed by asking a
+candidate to build something than by hiding a defect for them to find — which matches how
+frontend interviews usually run anyway.
+
+Worth putting to reviewers directly, since it is a product question rather than a bug: should
+`--role frontend --seniority junior` fall back to an extension, or refuse with an explanation?
+Falling back silently would be the wrong kind of helpful — the seniority knob means something.
+
 ### Out-of-scope temptations logged, not built
 
 - _(none yet)_
