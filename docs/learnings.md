@@ -537,6 +537,39 @@ S5 invalidated a Phase 4 test fixture, and the full suite was not re-run until l
 fix, but the lesson is to run the whole suite after changing a stage's contract, not only the
 tests for the stage being edited.
 
+---
+
+## Phase 6 — End-to-end hardening
+
+### Correction to the dogfood assumption in context.md
+
+`context.md` and `goals.md` treat the dogfood repos (`gtm-os-console`, `signal-engine`) as the
+place the quality question gets answered — "would a reviewer recognise this as our code?".
+Om has since pointed out that **those repos were written by Claude Code, not by hand.**
+
+That materially weakens them as a quality signal. Mirroring recently-generated, conventional,
+internally-consistent code is the *easy* case. The hard case — and the one every real
+customer has — is a codebase written by several people over years: idiosyncratic conventions,
+a wrapper everyone works around, naming that only makes sense with the history. Whether
+Quarry can imitate *that* convincingly is the question that decides the product, and the
+dogfood repos cannot ask it.
+
+Consequences, applied to this phase:
+
+- **Hardening prioritises mature, human-written OSS repos with a strong house style** over
+  merely finding a TypeScript repo of the right size. A repo old and opinionated enough that
+  someone who knows it would immediately spot a fake is worth more than three modern ones.
+- **The dogfood runs stay, but prove something narrower**: that the pipeline survives a repo
+  the author can inspect, and that `mvp.md`'s demo storyline (which opens by pasting the
+  `signal-engine` URL) actually works. They are not the quality evidence.
+- **`goals.md` metric 1 — five reviewers judging against codebases they know — was always the
+  load-bearing measurement, and is now the only one that reaches the real question.** Worth
+  weighting the reviewer interviews accordingly, and worth trying to get one run against a
+  reviewer's own production repo, even locally on their machine.
+- The "no IP leaves your org" pitch also lands differently on an agent-written repo, where
+  there is little proprietary code to protect. Fine — Om is not the customer — but it means a
+  demo built on the dogfood repos leaves the pitch's strongest argument unexercised.
+
 ### Out-of-scope temptations logged, not built
 
 - _(none yet)_
