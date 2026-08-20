@@ -817,6 +817,53 @@ which role it is about to ask for. Cheap to fix, and worth fixing quickly: the b
 I read whether `--resume` actually saved an agent call, so a banner that overstates reuse
 makes every cost estimate downstream of it wrong.
 
+### The repair loop fired live, and its own record was wrong about it
+
+documenso `--role backend --seniority junior`, resumed from the frontend run. Attempt 1 was
+correct in every respect except eight copied lines — install, tests, bug demonstrability and
+gitleaks all passed, and only the overlap check failed:
+
+```
+src/security/reject-internal-target.ts:18
+  matches packages/lib/server-only/webhooks/assert-webhook-url.ts:39
+```
+
+The repair fixed that one file in place and the package verified. **S5 including the repair
+was 540 s** — less than either clean phase-6 run (874 s, 863 s), where a repair meant
+regenerating everything. That is the phase's central claim, measured on a live failure rather
+than argued from unit tests.
+
+Second time invariant 1 has caught real copying, on a different repo and a different surface.
+Both times the generator reached for the reference when writing something that felt like
+boilerplate — a form submit handler, then an SSRF host check.
+
+The packaged `meta.json` then said the run took one clean generation. `repairPackage()`
+returns its cost and the loop dropped it, so the `$3.255` printed was generation alone, and
+nothing recorded that this package had needed fixing at all. An interviewer reading
+`meta.json` before sending the take-home out could not have told. `generation.repairs` now
+counts rounds and `costUsd` accumulates every agent call.
+
+Worth naming the pattern: **the fix and the record of the fix are separate pieces of work,
+and finishing the first feels like finishing both.** Same shape as the two phase-6
+diagnostics bugs, where a correct check destroyed the evidence needed to act on it.
+
+### The data role works, and the split rule is what unblocked it
+
+redash `--role data --seniority junior`, on the `worker` component that only exists because of
+the process-split rule above. Verified first time, no repair: 21 files, `pip install -r
+requirements.txt` / `pytest -q`, checked-in `data/instruments.json` as the sample dataset the
+role archetype's stub strategy calls for, and `interviewer/test_verify.py` under the pytest
+naming the phase-6 fix established.
+
+The surface was redash's query-execution de-duplication lock; the package is a lab instrument
+job scheduler where resubmitting a sample silently fails to queue. Same shape — a lock keyed
+on a hash that outlives the run it belongs to — and a completely different domain. The brief
+is an incident report that states the symptom, never the cause, and never names a file.
+
+A `weak` lane produced a package worth shipping. That is one data point, not a rule, but it
+argues the rating gates the wrong thing: 945 loc was plenty, because S5 synthesises rather
+than excerpts, and what it needs from a lane is a *good surface*, not a big one.
+
 ### Out-of-scope temptations logged, not built
 
 - _(none yet)_
