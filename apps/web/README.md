@@ -40,3 +40,52 @@ the CLI does.
 **Generation takes 8–12 minutes.** That is S5 writing a whole repository, then S6 installing
 it, running its tests, and checking it against the source. The progress stream is the feature
 that makes the wait legible, not decoration around it.
+
+## Deploying it (Railway)
+
+Cloud deploy is on the out-of-scope list in `docs/mvp.md`; this exists because it was asked
+for explicitly.
+
+One service, not two. Splitting the page onto a static host and the API onto Railway buys
+nothing — the page is about 2 kB of JavaScript — and costs CORS, two deploys to keep in step,
+and cross-origin SSE. And it has to be a container host rather than a serverless one, which
+is not a preference:
+
+- the pipeline shells out to `claude`, `gitleaks`, `git` and the generated package's own
+  toolchain, none of which exist in a serverless runtime;
+- `/api/map` writes `work/<runId>/` and `/api/generate` reads it back, so the two calls need
+  the same disk;
+- one generate call holds an HTTP connection for 8-12 minutes.
+
+There is no Dockerfile. `nixpacks.toml` tells Railway's builder which packages to add and how
+to build; `railway.json` points at it and sets the healthcheck.
+
+```
+railway up          # or point Railway at the repo — it reads railway.json
+```
+
+Then, on the service:
+
+| Setting             | Value                                                                  |
+| ------------------- | ---------------------------------------------------------------------- |
+| Volume              | mounted at `/data` (`nixpacks.toml` sets `QUARRY_WORK_DIR=/data/work`) |
+| `ANTHROPIC_API_KEY` | your key                                                               |
+| `QUARRY_PASSWORD`   | any string — the app refuses to serve without it                       |
+
+`GET /api/health` is the healthcheck: it reports whether `claude`, `gitleaks` and `git` are
+present and the volume is writable, and returns 503 if not. A container that boots without
+them serves a page that looks fine and then fails several minutes into a run, having already
+spent money. If a deploy comes up unhealthy, that response names which one is missing.
+
+### The password is not optional
+
+S6 installs and runs code an agent wrote moments earlier, from a repository whoever loads the
+page typed in. On a laptop that is fine. On a public URL it is a stranger spending your API
+credits to run arbitrary code on your container, so an unset `QUARRY_PASSWORD` fails closed in
+production rather than serving an open endpoint.
+
+### Sizing
+
+A verification run clones the source repo and installs the generated package's dependencies.
+documenso is 2,605 files; give the volume a few GB rather than the minimum, and expect the
+service to want around 1 GB of RAM while `npm install` runs.
