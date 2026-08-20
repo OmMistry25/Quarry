@@ -14,9 +14,15 @@
 nixPkgs = ['...', 'git', 'gitleaks', 'python3']
 
 [phases.install]
-# `npm install -g` into a nix-provided node would try to write to the read-only nix store,
-# so the prefix is pinned to a writable path that is already on PATH.
-cmds = ['...', 'npm install -g @anthropic-ai/claude-code']
+# An unqualified `npm install -g` put the CLI somewhere the runtime PATH never reached, and
+# the first sign of it was `claude: false` from the live health check. `--prefix /usr/local`
+# names the destination, and running the binary by absolute path in the same step means a
+# build that gets this wrong fails here rather than four minutes into a healthcheck.
+#
+# Not a workspace dependency: the CLI requires Node >= 22 and this repo's floor is 20, so
+# depending on it would fail `pnpm install` for every contributor on Node 20 — which is what
+# CI caught. CLAUDE.md's contract is that `claude` is on PATH, and this satisfies it.
+cmds = ['...', 'npm install -g --prefix /usr/local @anthropic-ai/claude-code', '/usr/local/bin/claude --version']
 
 [phases.build]
 # One command: `web`'s own build script builds core first, so a clean checkout works whatever
@@ -29,7 +35,6 @@ cmds = ['pnpm --filter web build']
 cmd = 'pnpm --filter web start'
 
 [variables]
-NPM_CONFIG_PREFIX = '/usr/local'
 NODE_ENV = 'production'
 # Run directories go on the mounted volume: the run id /api/map hands the browser has to
 # still resolve when /api/generate asks for it.
