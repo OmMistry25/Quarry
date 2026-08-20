@@ -17,11 +17,18 @@ const present = async (command: string, args: string[]): Promise<boolean> =>
   );
 
 /**
- * Readiness, not liveness.
+ * Liveness, with readiness in the body.
  *
- * A container that boots without `claude`, without `gitleaks`, or without a writable volume
- * serves a page that looks perfectly healthy and then fails several minutes into a run, after
- * spending real money. Better to say so at the door.
+ * This returned 503 when a binary was missing, on the reasoning that a container which cannot
+ * do the work should not come up. That was wrong in a way only a real deploy shows: Railway
+ * reports a failed healthcheck as "service unavailable" and never surfaces the response body,
+ * so fourteen identical retries said nothing about *which* piece was missing — the one thing
+ * this endpoint exists to answer.
+ *
+ * So the status code answers "is the server serving", which is what a platform healthcheck is
+ * for, and the body answers "can it actually work". The page reads the same body and refuses
+ * to start a run it knows will fail, which is where that check belongs — in front of the user
+ * about to spend ten minutes and real money, not in front of the deploy.
  */
 export async function GET(): Promise<Response> {
   const [claude, gitleaks, git] = await Promise.all([
@@ -45,8 +52,12 @@ export async function GET(): Promise<Response> {
   const apiKey = (process.env.ANTHROPIC_API_KEY ?? '') !== '';
   const ok = claude && gitleaks && git && writable;
 
-  return Response.json(
-    { ok, claude, gitleaks, git, workDir: work, writable, apiKey },
-    { status: ok ? 200 : 503 },
-  );
+  const missing = [
+    claude ? undefined : 'claude',
+    gitleaks ? undefined : 'gitleaks',
+    git ? undefined : 'git',
+    writable ? undefined : `a writable ${work}`,
+  ].filter((name): name is string => name !== undefined);
+
+  return Response.json({ ok, missing, claude, gitleaks, git, workDir: work, writable, apiKey });
 }

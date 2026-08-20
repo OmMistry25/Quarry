@@ -1,6 +1,6 @@
 'use client';
 
-import { useRef, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 
 import type { DoneEvent, QuarryEvent, RolesEvent } from '@/lib/events';
 import { parseEvents } from '@/lib/sse';
@@ -26,7 +26,20 @@ export default function Page() {
   const [seniority, setSeniority] = useState<string>('mid');
   const [done, setDone] = useState<DoneEvent | undefined>();
   const [error, setError] = useState<string | undefined>();
+  const [missing, setMissing] = useState<string[]>([]);
   const log = useRef<HTMLDivElement>(null);
+
+  /**
+   * Ask the server what it is missing before the user spends ten minutes finding out.
+   * A container without `gitleaks` reaches S6 and fails there, having already paid for
+   * generation.
+   */
+  useEffect(() => {
+    void fetch('/api/health')
+      .then((response) => response.json() as Promise<{ missing?: string[] }>)
+      .then((health) => setMissing(health.missing ?? []))
+      .catch(() => setMissing([]));
+  }, []);
 
   const append = (line: Line): void => {
     setLines((current) => [...current, line]);
@@ -129,6 +142,7 @@ export default function Page() {
   };
 
   const busy = phase === 'mapping' || phase === 'generating';
+  const unready = missing.length > 0;
 
   return (
     <main>
@@ -154,10 +168,17 @@ export default function Page() {
           disabled={busy}
           aria-label="Repository URL"
         />
-        <button type="submit" disabled={busy || repo.trim() === ''}>
+        <button type="submit" disabled={busy || unready || repo.trim() === ''}>
           {phase === 'mapping' ? 'Reading…' : 'Read repo'}
         </button>
       </form>
+
+      {unready && (
+        <p className="error">
+          This server is missing {missing.join(', ')}. Generation needs it and would fail part way
+          through, so it is disabled.
+        </p>
+      )}
 
       {error !== undefined && <p className="error">{error}</p>}
 
@@ -169,7 +190,7 @@ export default function Page() {
               <button
                 key={card.role}
                 className={`card ${card.rating}`}
-                disabled={!isOffered(card.rating) || busy}
+                disabled={!isOffered(card.rating) || busy || unready}
                 onClick={() => void generate(card.role)}
               >
                 <span className="role">{card.label}</span>

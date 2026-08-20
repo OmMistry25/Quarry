@@ -38,6 +38,13 @@ export function middleware(request: NextRequest): NextResponse {
 }
 
 export const config = {
-  // Everything except Next's own static output, which carries nothing worth gating.
-  matcher: ['/((?!_next/static|_next/image|favicon.ico).*)'],
+  /**
+   * Everything except Next's own static output — and `/api/health`.
+   *
+   * The healthcheck is why this exclusion exists rather than a convenience. Railway polls
+   * `/api/health` with no credentials: gated, it answers 401, or 503 when no password is set
+   * at all, and Railway reports "service unavailable" fourteen times while the app runs
+   * perfectly. It returns four booleans and a container path, which is not worth a password.
+   */
+  matcher: ['/((?!_next/static|_next/image|favicon.ico|api/health).*)'],
 };
