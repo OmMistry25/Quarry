@@ -1066,6 +1066,35 @@ clean checkout did.
 perfectly. Found by asking what the healthcheck itself receives, rather than what a browser
 does.
 
+### The healthcheck fix I claimed to have shipped was sitting in a stash
+
+The second Railway deploy built cleanly and then failed its healthcheck fourteen times.
+`/api/health` had been excluded from the password gate — except the exclusion was an
+uncommitted edit when I started a fresh branch, `git stash -u` swept it up, and
+`git checkout <branch> -- apps/web/middleware.ts` then restored the *committed* version
+without it. PR #10 said the healthcheck was unblocked. It was not, and I had verified the fix
+before losing it, which is the part that made it invisible: the memory of a passing test
+outlived the code that passed it.
+
+Reproduced by running the app exactly as Railway does — production, zero variables — where
+`/api/health` returned 503 with the middleware's "QUARRY_PASSWORD is not set" body. That is
+precisely what Railway reported as "service unavailable", fourteen times.
+
+**Verify against the tree, not the recollection.** A `git stash` between the test and the
+commit is enough to separate them.
+
+### A healthcheck that hides its diagnosis is worse than none
+
+The endpoint returned 503 when a binary was missing, so that a container which cannot work
+would not come up. A real deploy showed the flaw: Railway renders a failed healthcheck as
+"service unavailable" and never shows the response body, so the endpoint built to name the
+missing piece said nothing at all through fourteen retries.
+
+The status code now answers "is the server serving", which is what a platform healthcheck is
+for, and the body answers "can it do the work". The page fetches the same body and disables
+generation with the reason when something is missing — which is where that check belongs:
+in front of the user about to spend ten minutes and real money, not in front of the deploy.
+
 **Not verified:** nothing here has been deployed, and there is no Docker daemon in this
 container to build an image with either. The `nixpacks.toml` schema was read from the docs
 rather than recalled, and `@anthropic-ai/claude-code` was confirmed to resolve on npm, but the

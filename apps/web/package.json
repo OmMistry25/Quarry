@@ -7,7 +7,7 @@
   "scripts": {
     "dev": "next dev",
     "build": "pnpm --filter core build && next build",
-    "start": "next start -p ${PORT:-3000}",
+    "start": "next start -H 0.0.0.0 -p ${PORT:-3000}",
     "typecheck": "tsc --noEmit"
   },
   "dependencies": {
