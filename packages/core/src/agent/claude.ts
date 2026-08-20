@@ -102,6 +102,51 @@ export function claudeBinary(): string {
   return configured !== undefined && configured !== '' ? configured : 'claude';
 }
 
+type Envelope = z.infer<typeof AgentEnvelope>;
+
+/**
+ * Turn the CLI's error envelope into something a human can act on.
+ *
+ * The envelope is the same whether the CLI exits 0 or 1, and an API error exits 1 — so
+ * without this the caller saw execa's raw message: the whole command line, then the whole
+ * JSON blob, with `"result":"Credit balance is too low"` buried in the middle of it. The
+ * cause was one short sentence and the report was four hundred characters of noise.
+ */
+function describeAgentError(envelope: Envelope): QuarryError {
+  const status = envelope.api_error_status ?? envelope.subtype ?? 'unknown';
+  const result = truncate(envelope.result, 400);
+
+  // Billing is the one failure here that no amount of retrying or regenerating can fix, and
+  // it is not a problem with the repository being assessed — say so, rather than leaving it
+  // to look like Quarry mis-handled the run.
+  if (/credit balance|insufficient|quota|billing/i.test(envelope.result)) {
+    return new QuarryError(
+      `The Anthropic account behind this API key cannot run the request: ${result}. ` +
+        'Quarry cannot proceed until that is resolved — this is an account problem, not a ' +
+        'problem with the repository or the generated package.',
+    );
+  }
+
+  return new QuarryError(`The agent reported an error (${String(status)}): ${result}`);
+}
+
+/**
+ * Read the CLI's error envelope out of a failed invocation, if it left one.
+ *
+ * A non-zero exit does not mean there is nothing to read: on an API error the CLI prints its
+ * JSON envelope and *then* exits 1. Without this the caller got execa's raw message — the
+ * whole command line followed by the whole blob — with the one useful sentence buried in it.
+ *
+ * Returns undefined when the failure carries no envelope, so the caller can fall back to the
+ * raw detail rather than inventing a cause.
+ */
+export function explainCliFailure(error: unknown): QuarryError | undefined {
+  const output = (error as { stdout?: unknown } | null)?.stdout;
+  const envelope = AgentEnvelope.safeParse(safeJsonParse(typeof output === 'string' ? output : ''));
+
+  return envelope.success && envelope.data.is_error ? describeAgentError(envelope.data) : undefined;
+}
+
 export const execaTransport: AgentTransport = async (invocation) => {
   let stdout: string;
 
@@ -130,6 +175,9 @@ export const execaTransport: AgentTransport = async (invocation) => {
       );
     }
 
+    const reported = explainCliFailure(error);
+    if (reported !== undefined) throw reported;
+
     throw new QuarryError(`The \`claude\` CLI failed: ${detail}`, { cause: error });
   }
 
@@ -140,12 +188,7 @@ export const execaTransport: AgentTransport = async (invocation) => {
     );
   }
 
-  if (parsed.data.is_error) {
-    throw new QuarryError(
-      `The agent reported an error (${parsed.data.api_error_status ?? parsed.data.subtype ?? 'unknown'}): ` +
-        truncate(parsed.data.result, 400),
-    );
-  }
+  if (parsed.data.is_error) throw describeAgentError(parsed.data);
 
   return { text: parsed.data.result, costUsd: parsed.data.total_cost_usd };
 };
