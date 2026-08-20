@@ -11,7 +11,7 @@
   "scripts": {
     "build": "tsc -b",
     "clean": "tsc -b --clean",
-    "typecheck": "tsc -b && tsc -p tsconfig.test.json",
+    "typecheck": "tsc -b && tsc -p tsconfig.test.json && pnpm --filter web typecheck",
     "test": "vitest run",
     "test:watch": "vitest",
     "lint": "eslint .",

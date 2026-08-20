@@ -955,6 +955,52 @@ Four roles, four verified packages, two repos:
 Every one inside the 20-minute target, including the one that needed a repair — which is the
 phase's central claim, and the repair round is why the number is defensible rather than lucky.
 
+## Phase 8 — Demo UI
+
+### `core` cannot be bundled, and that turned out to be the right answer
+
+Next refused to build twice before the shape was right. Webpack rewrites
+`new URL('../../../../prompts/', import.meta.url)` and then cannot resolve it, so `core` has
+to stay out of the bundle; but declaring it a CommonJS external makes the server `require()`
+an ESM-only package whose exports map has no `require` condition — and Node 20, our CI floor,
+cannot `require` ESM at all.
+
+A dynamic `import()` marked `webpackIgnore` solves both, and is better than a workaround: Node
+resolves `core` from `node_modules` exactly as the CLI does, so **the UI runs the same code the
+CLI runs** rather than a rewritten copy of it. Worth remembering the next time something wants
+bundling — the pipeline shells out to `claude` and `gitleaks`, reads prompts off disk, and
+spawns installs. It is not bundle-shaped and should not be made to be.
+
+The page also frames SSE itself rather than using `EventSource`, which can only issue GETs.
+Starting a run is a POST, and putting a repo URL and a role into a query string to satisfy the
+browser API would have been the tail wagging the dog. The framing has its own tests, including
+the one that actually bites: a chunk boundary landing mid-frame, where a greedy parser throws
+on half-written JSON and kills the progress stream while the run carries on fine.
+
+### The overlap check spent a repair round on a tsconfig
+
+The browser acceptance run passed, but the first attempt failed like this:
+
+```
+FAIL  overlap   tsconfig.json:1 matches tsconfig.json:1
+```
+
+Eight identical lines of `"target": "ES2022"`, `"module": "NodeNext"`, `"strict": true`. There
+is no other way to write a correct TypeScript config for the same target, so the generator had
+not copied anything in the sense the rule cares about — and the single repair SPEC allows was
+spent rewriting a config file.
+
+`EXEMPT_BASENAMES` covers dependency manifests on the reasoning that a manifest carries no
+logic. A `tsconfig.json` is arguably the same category. But CLAUDE.md invariant 1 says that
+when the check fails, generation gets fixed and the check does not get loosened — and every
+exemption is a hole in the one guarantee the whole pitch rests on.
+
+**Flagged, not changed**, per the standing rule about ambiguity that touches an invariant. The
+cost is real but bounded: a wasted repair round, and a run that then has no repair budget left
+if something genuine also fails. Options are to exempt `tsconfig.json` and its peers, to have
+S5 write a deliberately different config, or to leave it and accept the occasional wasted
+round.
+
 ### Out-of-scope temptations logged, not built
 
 - _(none yet)_

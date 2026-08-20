@@ -14,7 +14,7 @@ export default defineConfig({
     ],
   },
   test: {
-    include: ['packages/*/test/**/*.test.ts'],
+    include: ['packages/*/test/**/*.test.ts', 'apps/*/test/**/*.test.ts'],
     exclude: ['**/node_modules/**', '**/dist/**', 'work/**'],
     environment: 'node',
     // Stage tests shell out to git/subprocesses; keep the default generous but bounded.

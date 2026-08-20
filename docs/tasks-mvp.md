@@ -73,8 +73,8 @@ Rules: work top to bottom. Check items off in this file as they're completed. Ea
 - ✅ Check: one monorepo yields packages for 2 roles (goals.md metric 5).
 
 ## Phase 8 — Demo UI
-- [ ] Next.js single page: URL input → role cards from `roles.json` → seniority picker → SSE stage progress → download button
-- [ ] API route wraps core pipeline; no persistence beyond `work/`
+- [x] Next.js single page: URL input → role cards from `roles.json` → seniority picker → SSE stage progress → download button
+- [x] API route wraps core pipeline; no persistence beyond `work/`
 - ✅ Check: full browser flow on a dogfood repo; SPEC acceptance 6.
 
 ## Phase 9 — Demo prep (human tasks, not Claude Code)
