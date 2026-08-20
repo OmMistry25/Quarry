@@ -53,6 +53,24 @@ describe('scrubbedEnv', () => {
     expect(env.SOME_FUTURE_VENDOR_TOKEN).toBeUndefined();
   });
 
+  /**
+   * pip could not reach PyPI at all on a proxy that terminates TLS with its own CA. It read
+   * as a package problem — a certificate error in the middle of an install — and it was the
+   * allowlist, which had been written for npm.
+   */
+  it("keeps pip's certificate configuration, not just npm's", () => {
+    const env = scrubbedEnv({
+      PATH: '/usr/bin',
+      PIP_CERT: '/etc/ca.crt',
+      REQUESTS_CA_BUNDLE: '/etc/ca.crt',
+      CURL_CA_BUNDLE: '/etc/ca.crt',
+    });
+
+    expect(env.PIP_CERT).toBe('/etc/ca.crt');
+    expect(env.REQUESTS_CA_BUNDLE).toBe('/etc/ca.crt');
+    expect(env.CURL_CA_BUNDLE).toBe('/etc/ca.crt');
+  });
+
   it('sets CI so installers do not go interactive', () => {
     expect(scrubbedEnv({ PATH: '/usr/bin' }).CI).toBe('1');
   });
