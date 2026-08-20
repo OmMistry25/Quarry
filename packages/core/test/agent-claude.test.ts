@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 
-import { buildArgsForTest } from '../src/agent/claude.js';
+import { buildArgsForTest, explainCliFailure } from '../src/agent/claude.js';
 
 /**
  * The transport itself shells out, so these cover the argument construction rather than the
@@ -65,5 +65,49 @@ describe('claude invocation arguments', () => {
 
     expect(buildArgsForTest(base)).not.toContain('--model');
     expect(buildArgsForTest({ ...base, model: 'sonnet' })).toContain('sonnet');
+  });
+});
+
+describe('a CLI that exits non-zero still has something to say', () => {
+  /**
+   * The real failure, from the deployed app: the account behind the key ran out of credit.
+   * The CLI printed its envelope and exited 1, so the caller saw execa's raw message — the
+   * command line and the whole JSON blob, with the one useful sentence buried in it.
+   */
+  const failure = (stdout: string): Error & { stdout: string } =>
+    Object.assign(new Error('Command failed with exit code 1: /usr/local/bin/claude -p …'), {
+      stdout,
+    });
+
+  const outOfCredit = failure(
+    JSON.stringify({
+      is_error: true,
+      result: 'Credit balance is too low',
+      api_error_status: 400,
+      subtype: 'success',
+    }),
+  );
+
+  it('names billing as the cause, and says it is not the repository', () => {
+    expect(explainCliFailure(outOfCredit)?.message).toMatch(
+      /account problem, not a problem with the repository/,
+    );
+  });
+
+  it('quotes what the API actually said', () => {
+    expect(explainCliFailure(outOfCredit)?.message).toMatch(/Credit balance is too low/);
+  });
+
+  it('reports other agent errors with their status', () => {
+    const overloaded = failure(
+      JSON.stringify({ is_error: true, result: 'Overloaded', api_error_status: 529 }),
+    );
+
+    expect(explainCliFailure(overloaded)?.message).toMatch(/\(529\): Overloaded/);
+  });
+
+  it('says nothing when the failure carries no envelope, so the caller keeps the raw detail', () => {
+    expect(explainCliFailure(failure('not json at all'))).toBeUndefined();
+    expect(explainCliFailure(new Error('spawn ENOENT'))).toBeUndefined();
   });
 });
