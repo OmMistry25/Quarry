@@ -37,3 +37,7 @@ id_rsa*
 .idea/
 .vscode/*
 !.vscode/extensions.json
+
+# Next.js build output and its generated ambient types.
+apps/web/.next/
+apps/web/next-env.d.ts

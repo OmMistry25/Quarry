@@ -2,6 +2,22 @@
   "name": "web",
   "version": "0.0.0",
   "private": true,
-  "description": "Quarry demo UI — placeholder until Phase 8.",
-  "type": "module"
+  "description": "Quarry demo UI — paste a repo URL, pick a role, download a verified package.",
+  "type": "module",
+  "scripts": {
+    "dev": "next dev",
+    "build": "next build",
+    "start": "next start",
+    "typecheck": "tsc --noEmit"
+  },
+  "dependencies": {
+    "core": "workspace:*",
+    "next": "^14.2.33",
+    "react": "^18.3.1",
+    "react-dom": "^18.3.1"
+  },
+  "devDependencies": {
+    "@types/react": "^18.3.12",
+    "@types/react-dom": "^18.3.1"
+  }
 }
