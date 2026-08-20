@@ -31,7 +31,12 @@ const present = async (command: string, args: string[]): Promise<boolean> =>
  * about to spend ten minutes and real money, not in front of the deploy.
  */
 export async function GET(): Promise<Response> {
-  const [claude, gitleaks, git] = await Promise.all([
+  // Probe exactly what the pipeline will spawn — `QUARRY_CLAUDE_BIN` when set, `claude`
+  // otherwise — plus bare `claude`, because "not on PATH" and "not installed" produce the
+  // same failure and telling them apart cost a deploy round trip each time.
+  const binary = (process.env.QUARRY_CLAUDE_BIN ?? '').trim() || 'claude';
+  const [claude, claudeOnPath, gitleaks, git] = await Promise.all([
+    present(binary, ['--version']),
     present('claude', ['--version']),
     present('gitleaks', ['version']),
     present('git', ['--version']),
@@ -53,11 +58,24 @@ export async function GET(): Promise<Response> {
   const ok = claude && gitleaks && git && writable;
 
   const missing = [
-    claude ? undefined : 'claude',
+    claude ? undefined : `claude (tried ${binary})`,
     gitleaks ? undefined : 'gitleaks',
     git ? undefined : 'git',
     writable ? undefined : `a writable ${work}`,
   ].filter((name): name is string => name !== undefined);
 
-  return Response.json({ ok, missing, claude, gitleaks, git, workDir: work, writable, apiKey });
+  return Response.json({
+    ok,
+    missing,
+    claude,
+    claudeBinary: binary,
+    claudeOnPath,
+    gitleaks,
+    git,
+    workDir: work,
+    writable,
+    apiKey,
+    // The list itself, because a PATH problem is unfixable without seeing what PATH is.
+    path: (process.env.PATH ?? '').split(':'),
+  });
 }

@@ -1161,6 +1161,35 @@ before it in this deploy — the build failure, the stashed exclusion, fourteen 
 "service unavailable" lines — cost a round trip each precisely because nothing could report
 its own state.
 
+### PATH is not always arrangeable, so stop arranging it
+
+The build installed the CLI to `/usr/local/bin` and ran `/usr/local/bin/claude --version` in
+the same step, so it demonstrably worked there — and the deployed app still reported
+`claude: false`. The runtime PATH on Railway is composed by the platform's builder from its
+own nix profile entries, and `/usr/local/bin` was not among them. Binary present, `claude`
+resolving to nothing.
+
+Three attempts at this, and the first two were both "make PATH right":
+
+1. `npm install -g`, unqualified — landed somewhere the runtime never looked.
+2. A dependency of the web app — CI rejected it in fifteen seconds, because the CLI needs
+   Node 22 and this repo's floor is 20.
+3. `PATH=/usr/local/bin:$PATH` in the start command — abandoned before shipping, because it
+   depends on the platform running that command through a shell, which is not something I
+   could verify from here.
+
+The fix is to stop needing PATH: `QUARRY_CLAUDE_BIN` names the binary, defaulting to `claude`
+so CLAUDE.md's contract holds everywhere else. Deterministic, one env var, no assumptions
+about how the platform composes anything.
+
+**The pattern across all three deploy rounds:** every failure was something the local
+environment supplied for free — a built `dist/`, a global `claude`, a PATH assembled by a
+developer's shell. The container has none of that, which is exactly what makes it a real test.
+
+`/api/health` now probes the binary the pipeline will actually spawn, reports it by name, and
+also reports bare `claude` separately — because "not on PATH" and "not installed" produce
+identical failures, and telling them apart cost a deploy round trip each time.
+
 ### Out-of-scope temptations logged, not built
 
 - _(none yet)_

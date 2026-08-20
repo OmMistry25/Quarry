@@ -89,11 +89,24 @@ function buildArgs(invocation: AgentInvocation): string[] {
 /** Exposed for tests: argument construction is worth asserting, the subprocess is not. */
 export const buildArgsForTest = buildArgs;
 
+/**
+ * Which binary to run. `claude` on PATH by default, per CLAUDE.md.
+ *
+ * The override exists because PATH is not always arrangeable. On Railway the CLI installs to
+ * a known location and the runtime PATH, composed by the platform's builder, does not include
+ * it — so the binary is present and `claude` still resolves to nothing. Naming the path
+ * directly removes the guesswork rather than fighting the PATH the platform gives you.
+ */
+export function claudeBinary(): string {
+  const configured = process.env.QUARRY_CLAUDE_BIN?.trim();
+  return configured !== undefined && configured !== '' ? configured : 'claude';
+}
+
 export const execaTransport: AgentTransport = async (invocation) => {
   let stdout: string;
 
   try {
-    const result = await execa('claude', buildArgs(invocation), {
+    const result = await execa(claudeBinary(), buildArgs(invocation), {
       cwd: invocation.cwd,
       // The prompt goes in on stdin, not as an argument. Linux caps a single argv entry at
       // 128 KB (MAX_ARG_STRLEN), and architecture-mvp.md budgets S5's reference material at
