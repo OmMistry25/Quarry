@@ -14,15 +14,21 @@
 nixPkgs = ['...', 'git', 'gitleaks', 'python3']
 
 [phases.install]
-# An unqualified `npm install -g` put the CLI somewhere the runtime PATH never reached, and
-# the first sign of it was `claude: false` from the live health check. `--prefix /usr/local`
-# names the destination, and running the binary by absolute path in the same step means a
-# build that gets this wrong fails here rather than four minutes into a healthcheck.
+# The prefix is `/usr`, so the binary lands in `/usr/bin`, and running it by absolute path in
+# the same step means a build that gets this wrong fails here rather than four minutes into a
+# healthcheck.
+#
+# `/usr/bin` is not arbitrary: it is one of the few directories actually on the runtime PATH
+# that Railway composes. `/usr/local/bin` — the obvious choice, and the previous one — is not,
+# which the deployed health check reported by dumping PATH:
+#
+#   /app/apps/web/node_modules/.bin, /app/node_modules/.bin, /root/.nix-profile/bin,
+#   /nix/var/nix/profiles/default/bin, /bin, /sbin, /usr/bin, /usr/sbin
 #
 # Not a workspace dependency: the CLI requires Node >= 22 and this repo's floor is 20, so
 # depending on it would fail `pnpm install` for every contributor on Node 20 — which is what
 # CI caught. CLAUDE.md's contract is that `claude` is on PATH, and this satisfies it.
-cmds = ['...', 'npm install -g --prefix /usr/local @anthropic-ai/claude-code', '/usr/local/bin/claude --version']
+cmds = ['...', 'npm install -g --prefix /usr @anthropic-ai/claude-code', '/usr/bin/claude --version']
 
 [phases.build]
 # One command: `web`'s own build script builds core first, so a clean checkout works whatever
@@ -36,10 +42,11 @@ cmd = 'pnpm --filter web start'
 
 [variables]
 NODE_ENV = 'production'
-# The build installs the CLI here and proves it runs, but the runtime PATH is composed by the
-# platform's builder and did not include /usr/local/bin: the binary was present and `claude`
-# still resolved to nothing. Naming the path is deterministic, where arranging PATH is not.
-QUARRY_CLAUDE_BIN = '/usr/local/bin/claude'
+# Belt and braces. The install above already puts the binary on the runtime PATH, so this is
+# not load-bearing — and on Railway it does not even apply: variables declared here reach the
+# build and not the container, which the deployed health check proved by reporting
+# `claudeBinary: "claude"` with this set. Set it as a *service* variable to override.
+QUARRY_CLAUDE_BIN = '/usr/bin/claude'
 # Run directories go on the mounted volume: the run id /api/map hands the browser has to
 # still resolve when /api/generate asks for it.
 QUARRY_WORK_DIR = '/data/work'

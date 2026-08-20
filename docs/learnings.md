@@ -1178,9 +1178,26 @@ Three attempts at this, and the first two were both "make PATH right":
    depends on the platform running that command through a shell, which is not something I
    could verify from here.
 
-The fix is to stop needing PATH: `QUARRY_CLAUDE_BIN` names the binary, defaulting to `claude`
-so CLAUDE.md's contract holds everywhere else. Deterministic, one env var, no assumptions
-about how the platform composes anything.
+The fix was to stop needing PATH: `QUARRY_CLAUDE_BIN` names the binary, defaulting to `claude`
+so CLAUDE.md's contract holds everywhere else.
+
+**And that failed too, for a reason the endpoint then explained in one request.** The deployed
+health check reported `claudeBinary: "claude"` — the override was never set — because
+variables declared in `nixpacks.toml` reach the *build* and not the container. The same
+response carried the runtime PATH, which is the thing every previous guess had been about:
+
+```
+/app/apps/web/node_modules/.bin  /app/node_modules/.bin  /root/.nix-profile/bin
+/nix/var/nix/profiles/default/bin  /bin  /sbin  /usr/bin  /usr/sbin
+```
+
+No `/usr/local/bin`. So the build now installs with `--prefix /usr`, putting the binary in
+`/usr/bin`, which is on that list — chosen from the deployed container's own report rather
+than from an assumption about where global installs go. The override remains as an escape
+hatch, settable as a Railway *service* variable, which does reach the runtime.
+
+**Four attempts, and the first three all guessed at an environment I could have asked.** The
+PATH dump cost three lines in a route handler and ended the guessing immediately.
 
 **The pattern across all three deploy rounds:** every failure was something the local
 environment supplied for free — a built `dist/`, a global `claude`, a PATH assembled by a
