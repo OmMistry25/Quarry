@@ -1001,6 +1001,77 @@ if something genuine also fails. Options are to exempt `tsconfig.json` and its p
 S5 write a deliberately different config, or to leave it and accept the occasional wasted
 round.
 
+### Container deploy — an out-of-scope item, built on request
+
+`mvp.md` lists "cloud deploy" as out of scope and this is a deliberate override, asked for by
+name after I flagged the line. Recorded here so it reads as a decision rather than drift.
+
+Vercel was the first suggestion and does not work, for reasons no amount of configuration
+fixes: the pipeline shells out to `claude`, `gitleaks`, `git` and the generated package's own
+toolchain, none of which exist in a serverless runtime; `/api/map` writes `work/<runId>/` and
+`/api/generate` reads it back, so the two calls need the same disk rather than two ephemeral
+`/tmp`s; and one generate call holds a connection for 8-12 minutes. Railway runs a container
+with a volume and no request ceiling, so all three go away.
+
+Two things only showed up because deploying was considered at all:
+
+**The SSE stream goes silent for 7-12 minutes.** S5 emits nothing while it writes a
+repository. On a laptop that is merely quiet; behind any reverse proxy it is an idle
+connection that gets reaped, and the browser would show the run dying while the server
+carried on generating perfectly. Fixed with a comment-frame heartbeat — which the parser
+already ignored, and already had a test for.
+
+**The health check was wrong about itself.** It required `ANTHROPIC_API_KEY` for readiness,
+and this container is the counter-example: no key in the environment, `claude` authenticated
+by login, pipeline working all day. Requiring it would 503 a working deploy. It is reported
+now but not part of `ok`.
+
+Om then ruled out Docker, so the Dockerfile went and `nixpacks.toml` replaced it: Railway's
+builder reads the repo and assembles the image itself. `gitleaks` and `python3` come from
+nixpkgs by name rather than a downloaded release tarball, which is strictly better — one less
+pinned URL to rot. The one sharp edge is `npm install -g` against a nix-provided node, which
+would try to write to the read-only nix store, so `NPM_CONFIG_PREFIX` is pinned to
+`/usr/local`.
+
+Vercel-plus-Railway was considered and rejected. The page is ~2 kB of JavaScript, so there is
+no load to offload, and splitting it would add CORS, two deploys to keep in step, and
+cross-origin SSE for nothing.
+
+### The first real deploy found what local testing structurally could not
+
+Railway's build failed on a clean checkout:
+
+```
+./app/api/generate/route.ts:3:42
+Type error: Cannot find module 'core' or its corresponding type declarations.
+> 3 | import type { RoleId, SeniorityId } from 'core';
+```
+
+`core` resolves its types through `"types": "./dist/index.d.ts"`, and `dist/` does not exist
+until core is built. Every local `pnpm --filter web build` had been run in a tree where core
+had been built minutes earlier, so the dependency was invisible — the machine was carrying
+state the repository does not.
+
+Reproduced by deleting `packages/core/dist` and running the same command: same file, same
+line, same error. `web`'s build script now builds core first, so the command works on a clean
+checkout whatever the platform decides to run.
+
+The wider lesson is about what a green local build proves. Everything passed here — 457 tests,
+typecheck, lint, `next build` — and the repo still could not be built from scratch. A CI job
+that only ever runs `pnpm typecheck` in a warm tree would not have caught it either; the first
+clean checkout did.
+
+**Also worth recording:** the healthcheck was behind the password gate. Railway polls
+`/api/health` with no credentials, gets 401, and marks the deploy unhealthy while the app runs
+perfectly. Found by asking what the healthcheck itself receives, rather than what a browser
+does.
+
+**Not verified:** nothing here has been deployed, and there is no Docker daemon in this
+container to build an image with either. The `nixpacks.toml` schema was read from the docs
+rather than recalled, and `@anthropic-ai/claude-code` was confirmed to resolve on npm, but the
+first real Railway build may still find something. `/api/health` exists so that it finds it
+loudly.
+
 ### Out-of-scope temptations logged, not built
 
 - _(none yet)_

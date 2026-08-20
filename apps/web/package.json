@@ -2,12 +2,12 @@
   "name": "web",
   "version": "0.0.0",
   "private": true,
-  "description": "Quarry demo UI — paste a repo URL, pick a role, download a verified package.",
+  "description": "Quarry demo UI \u2014 paste a repo URL, pick a role, download a verified package.",
   "type": "module",
   "scripts": {
     "dev": "next dev",
-    "build": "next build",
-    "start": "next start",
+    "build": "pnpm --filter core build && next build",
+    "start": "next start -p ${PORT:-3000}",
     "typecheck": "tsc --noEmit"
   },
   "dependencies": {
