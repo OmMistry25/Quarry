@@ -33,6 +33,7 @@ export {
   type ComponentKind,
 } from './schemas/components.js';
 export { runAgent, type AgentAttempt, type AgentResult } from './agent/runAgent.js';
+export { claudeBinary } from './agent/claude.js';
 export type { AgentTransport, AgentInvocation, AgentReply } from './agent/claude.js';
 export { DEFAULT_CONTEXT_BUDGET, type ContextBudget } from './agent/context.js';
 export { createRunDir, type RunDir } from './run.js';

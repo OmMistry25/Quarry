@@ -36,6 +36,10 @@ cmd = 'pnpm --filter web start'
 
 [variables]
 NODE_ENV = 'production'
+# The build installs the CLI here and proves it runs, but the runtime PATH is composed by the
+# platform's builder and did not include /usr/local/bin: the binary was present and `claude`
+# still resolved to nothing. Naming the path is deterministic, where arranging PATH is not.
+QUARRY_CLAUDE_BIN = '/usr/local/bin/claude'
 # Run directories go on the mounted volume: the run id /api/map hands the browser has to
 # still resolve when /api/generate asks for it.
 QUARRY_WORK_DIR = '/data/work'
