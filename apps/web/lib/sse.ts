@@ -36,6 +36,16 @@ export function parseEvents(buffer: string): { events: QuarryEvent[]; rest: stri
  * browser nothing, and every failure here — an unsupported role, a package that would not
  * verify — is one the user needs the text of.
  */
+/**
+ * How often to send a comment frame while nothing else is happening.
+ *
+ * S5 emits no events for the 7-12 minutes it spends writing a repository. On a laptop that
+ * is merely quiet; behind any reverse proxy — Railway, nginx, Cloudflare — an idle
+ * connection that long is reaped, and the browser sees the run die while the server happily
+ * carries on generating. A comment frame keeps bytes moving and is ignored by the parser.
+ */
+const HEARTBEAT_MS = 15_000;
+
 export function streamResponse(
   body: (emit: (event: QuarryEvent) => void) => Promise<void>,
 ): Response {
@@ -43,15 +53,22 @@ export function streamResponse(
 
   const stream = new ReadableStream<Uint8Array>({
     async start(controller) {
-      const emit = (event: QuarryEvent): void => {
-        controller.enqueue(encoder.encode(encodeEvent(event)));
+      let open = true;
+
+      const write = (chunk: string): void => {
+        if (open) controller.enqueue(encoder.encode(chunk));
       };
+
+      const emit = (event: QuarryEvent): void => write(encodeEvent(event));
+      const heartbeat = setInterval(() => write(': keep-alive\n\n'), HEARTBEAT_MS);
 
       try {
         await body(emit);
       } catch (error) {
         emit({ kind: 'error', message: error instanceof Error ? error.message : String(error) });
       } finally {
+        clearInterval(heartbeat);
+        open = false;
         controller.close();
       }
     },

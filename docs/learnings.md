@@ -1001,6 +1001,37 @@ if something genuine also fails. Options are to exempt `tsconfig.json` and its p
 S5 write a deliberately different config, or to leave it and accept the occasional wasted
 round.
 
+### Container deploy — an out-of-scope item, built on request
+
+`mvp.md` lists "cloud deploy" as out of scope and this is a deliberate override, asked for by
+name after I flagged the line. Recorded here so it reads as a decision rather than drift.
+
+Vercel was the first suggestion and does not work, for reasons no amount of configuration
+fixes: the pipeline shells out to `claude`, `gitleaks`, `git` and the generated package's own
+toolchain, none of which exist in a serverless runtime; `/api/map` writes `work/<runId>/` and
+`/api/generate` reads it back, so the two calls need the same disk rather than two ephemeral
+`/tmp`s; and one generate call holds a connection for 8-12 minutes. Railway runs a container
+with a volume and no request ceiling, so all three go away.
+
+Two things only showed up because deploying was considered at all:
+
+**The SSE stream goes silent for 7-12 minutes.** S5 emits nothing while it writes a
+repository. On a laptop that is merely quiet; behind any reverse proxy it is an idle
+connection that gets reaped, and the browser would show the run dying while the server
+carried on generating perfectly. Fixed with a comment-frame heartbeat — which the parser
+already ignored, and already had a test for.
+
+**The health check was wrong about itself.** It required `ANTHROPIC_API_KEY` for readiness,
+and this container is the counter-example: no key in the environment, `claude` authenticated
+by login, pipeline working all day. Requiring it would 503 a working deploy. It is reported
+now but not part of `ok`.
+
+**Not verified:** there is no Docker daemon in this container, so the image has never been
+built. The external facts it depends on were checked directly rather than assumed — the
+gitleaks release asset returns 200, `@anthropic-ai/claude-code` resolves on npm, and every
+path the Dockerfile copies exists — but the first real `docker build` may still find
+something.
+
 ### Out-of-scope temptations logged, not built
 
 - _(none yet)_
