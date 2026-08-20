@@ -69,7 +69,7 @@ Rules: work top to bottom. Check items off in this file as they're completed. Ea
 
 ## Phase 7 — Remaining roles
 - [x] `data` archetype (second priority — dogfood repos support it)
-- [ ] `frontend` + `fullstack` archetypes (only if a demo repo warrants them)
+- [x] `frontend` + `fullstack` archetypes (only if a demo repo warrants them)
 - ✅ Check: one monorepo yields packages for 2 roles (goals.md metric 5).
 
 ## Phase 8 — Demo UI

@@ -913,14 +913,47 @@ one component, where the kind-based rule cannot see it"; this one is "the seam s
 components, and a surface cannot". Same underlying assumption — one component per unit of work
 — failing in both directions.
 
-Not fixed, because the fix is a design change and not a prompt tweak: a fullstack surface has
-to name a pair (a client workflow and the endpoint it calls), which changes the surfaces schema
-and how S4 is asked to think. Flagging it rather than choosing unilaterally, per CLAUDE.md.
-The fullstack checkbox in `tasks-mvp.md` stays unticked.
+**Fixed.** Om asked for the judgement call, and the deciding fact was that `mvp.md` lists all
+four archetypes in scope while the role menu rates fullstack STRONG on most repos — so a user
+will pick it. Refusing a role the menu just called STRONG is incoherent; returning a backend
+package under a fullstack label is worse.
+
+A surface may now name `seamComponentId`. Two consequences were not obvious going in:
+
+- **Isolation is weighted highest (0.4), so the ranking was the second half of the bug.** Even
+  if S4 had proposed a seam surface, scoring the sides separately would have marked it down for
+  the dependency that is the whole point of it, and buried it under single-component surfaces.
+  The prompt now asks for isolation *of the pair as a unit*. Totals fell from 0.89 to 0.73,
+  which is the honest number.
+- **Reference material had to be taken round-robin, not in sequence.** redash is 48k loc of
+  Python against 29k of JavaScript, so filling the budget in order would have left the
+  generator nothing to mirror on the client side. The verified run drew 19 client files and 12
+  server files; the pre-fix run drew backend files only.
+
+The result installs with one command and the contract matches across the seam — the client
+calls `/api/equipment/:id/schedule`, the server defines it — with tests on both sides.
+
+I did not add an S6 shape check demanding both sides. With S4 unable to offer a seam surface,
+that would have failed every fullstack run: a missing capability dressed up as a verification
+failure.
 
 **What I would not do:** add an S6 shape check demanding both sides. With S4 unable to offer a
 seam surface, that would fail every fullstack run — dressing up a missing capability as a
 verification failure.
+
+### Phase 7 result
+
+Four roles, four verified packages, two repos:
+
+| Repo | Role / seniority | Task | S5 | Cost | Repairs |
+|---|---|---|---|---|---|
+| documenso | frontend / mid | extension | 444 s | $2.78 | 0 |
+| documenso | backend / junior | bug-hunt | 540 s | $3.26 | 1 |
+| redash | data / junior | bug-hunt | 723 s | $3.91 | 0 |
+| redash | fullstack / mid | extension | ~600 s | $3.24 | 0 |
+
+Every one inside the 20-minute target, including the one that needed a repair — which is the
+phase's central claim, and the repair round is why the number is defensible rather than lucky.
 
 ### Out-of-scope temptations logged, not built
 
