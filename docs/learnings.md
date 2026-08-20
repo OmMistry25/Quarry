@@ -864,6 +864,64 @@ A `weak` lane produced a package worth shipping. That is one data point, not a r
 argues the rating gates the wrong thing: 945 loc was plenty, because S5 synthesises rather
 than excerpts, and what it needs from a lane is a *good surface*, not a big one.
 
+### Verifying a Python package proved almost nothing
+
+The fullstack run failed on `ModuleNotFoundError: No module named 'flask'` for a package that
+declares flask and whose 23 tests pass. On this container pip installs into
+`/usr/local/lib/python3.11/dist-packages`, while `pytest` on PATH is `/root/.local/bin/pytest`
+with the shebang `#!/root/.local/share/uv/tools/pytest/bin/python` — a uv-managed tool venv
+that can see nothing pip installs. Install and tests ran in two different interpreters.
+
+S6 called it a package failure and spent a repair round on it. Third time this shape has
+appeared: a check that is wrong about *why* something failed sends the repair after a problem
+that does not exist, and in phase 6 that wasted repair is what broke the synthesis rule.
+
+Python verification now builds a virtualenv beside the package. The part I did not expect:
+**before this, the install step proved almost nothing.** pip answered "Requirement already
+satisfied" from the host's site-packages, so `requests` in phase 6 and the data package
+earlier today were both verified against dependencies that happened to be lying around. Their
+tests really passed, so the results stand — but a package could have shipped a dependency list
+that never once installed.
+
+The venv then exposed the second half immediately: pip could not reach PyPI, because the
+sandbox allowlist carries npm's proxy and CA settings and none of Python's. `PIP_CERT` and
+`REQUESTS_CA_BUNDLE` are set on this machine and were being scrubbed. Same gap as the
+HTTPS_PROXY bug, and it stayed hidden for exactly as long as installs never opened a socket.
+
+### Fullstack verified, and the package is not fullstack
+
+The re-run passed every check and produced a package with **no frontend in it at all** — 16
+files, `app.py`, a Flask API, models, pytest. Zero files matching react, jsx, html, fetch or
+axios. The brief is a backend ticket.
+
+Nothing caught it, and the cause is not S5 ignoring its instructions. It is S4. Every surface
+offered for the fullstack role belongs to exactly one component:
+
+```
+0.89 [backend-api] Query refresh scheduling with interval, exact-time and backoff rules
+0.83 [viz-lib]     Counter visualization value, target and trend computation
+0.81 [client]      Date-range query parameter normalization and execution formatting
+```
+
+SPEC defines a surface as "a self-contained workflow **inside a component**", and `Surface` has
+one `componentId`. So for a role whose whole definition is "assessed on a vertical slice across
+the seam", S4 cannot express the thing being asked for. S5 was handed a backend-api surface and
+wrote a backend package, correctly.
+
+This is the phase-6 fullstack note from the other side. That one was "the seam can live inside
+one component, where the kind-based rule cannot see it"; this one is "the seam spans two
+components, and a surface cannot". Same underlying assumption — one component per unit of work
+— failing in both directions.
+
+Not fixed, because the fix is a design change and not a prompt tweak: a fullstack surface has
+to name a pair (a client workflow and the endpoint it calls), which changes the surfaces schema
+and how S4 is asked to think. Flagging it rather than choosing unilaterally, per CLAUDE.md.
+The fullstack checkbox in `tasks-mvp.md` stays unticked.
+
+**What I would not do:** add an S6 shape check demanding both sides. With S4 unable to offer a
+seam surface, that would fail every fullstack run — dressing up a missing capability as a
+verification failure.
+
 ### Out-of-scope temptations logged, not built
 
 - _(none yet)_
