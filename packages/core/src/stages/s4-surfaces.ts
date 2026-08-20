@@ -88,6 +88,35 @@ export async function surfaceSelection(
           });
         }
 
+        // Fullstack is assessed on a slice across the seam, so a surface that names one
+        // component is not a fullstack surface at all — S5 would faithfully generate one
+        // side of it, which is exactly what happened before this check existed.
+        if (options.role === 'fullstack') {
+          if (surface.seamComponentId === undefined) {
+            ctx.addIssue({
+              code: 'custom',
+              path: ['surfaces', index, 'seamComponentId'],
+              message:
+                'a fullstack surface must span the seam: name the component on the other ' +
+                `side of it (one of: ${[...knownComponentIds].join(', ')})`,
+            });
+          } else if (surface.seamComponentId === surface.componentId) {
+            ctx.addIssue({
+              code: 'custom',
+              path: ['surfaces', index, 'seamComponentId'],
+              message: 'the two sides of a seam must be different components',
+            });
+          } else if (!knownComponentIds.has(surface.seamComponentId)) {
+            ctx.addIssue({
+              code: 'custom',
+              path: ['surfaces', index, 'seamComponentId'],
+              message:
+                `"${surface.seamComponentId}" is not an in-lane component id ` +
+                `(expected one of: ${[...knownComponentIds].join(', ')})`,
+            });
+          }
+        }
+
         for (const [pathIndex, filePath] of surface.paths.entries()) {
           if (!knownPaths.has(filePath)) {
             ctx.addIssue({

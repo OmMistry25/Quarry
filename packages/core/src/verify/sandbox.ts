@@ -55,6 +55,18 @@ const PASSTHROUGH_ENV = [
   'npm_config_noproxy',
   'npm_config_cafile',
   'npm_config_strict_ssl',
+
+  // The Python half of the same problem. The proxy fix above was written while chasing an
+  // npm install that hung, and it left pip blind: on a machine whose proxy terminates TLS
+  // with its own CA, pip cannot reach PyPI at all and reports a certificate error that reads
+  // like the package's fault. It stayed hidden until verification moved into a virtualenv,
+  // because before that pip answered "Requirement already satisfied" from the host and never
+  // opened a connection.
+  'PIP_CERT',
+  'REQUESTS_CA_BUNDLE',
+  'CURL_CA_BUNDLE',
+  'PIP_INDEX_URL',
+  'PIP_EXTRA_INDEX_URL',
 ] as const;
 
 export function scrubbedEnv(source: NodeJS.ProcessEnv = process.env): NodeJS.ProcessEnv {

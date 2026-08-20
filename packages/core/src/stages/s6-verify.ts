@@ -17,6 +17,7 @@ import {
   TEST_TIMEOUT_MS,
   type CommandResult,
 } from '../verify/sandbox.js';
+import { isPythonPackage, prepareVenv } from '../verify/pythonVenv.js';
 
 /**
  * S6 — Verification (docs/SPEC.md).
@@ -83,10 +84,28 @@ export async function verify(options: VerifyOptions): Promise<VerifyReport> {
   try {
     const failures: string[] = [];
 
-    const install = await runCommand(options.meta.generation.setupCommand, {
-      cwd: workingCandidate,
-      timeoutMs: options.installTimeoutMs ?? INSTALL_TIMEOUT_MS,
-    });
+    // A Python package installs and tests inside its own virtualenv, so both commands share
+    // one interpreter. Without it, pip and pytest resolved to different Pythons on this
+    // container and a correct package was rejected for a missing module it had declared.
+    const venv = (await isPythonPackage(workingCandidate))
+      ? await prepareVenv(path.join(sandboxDir, '.venv'), sandboxDir)
+      : undefined;
+
+    // A venv that cannot be built is the machine's problem, so it stands in as the install
+    // result: everything downstream already knows how to report a failed install, and
+    // `environmental` below keeps the repair loop from paying an agent call to fix a Python
+    // installation it cannot reach.
+    const venvFailed = venv !== undefined && !venv.ok;
+    const env = venvFailed ? undefined : venv?.env;
+
+    const install =
+      venvFailed && venv?.command !== undefined
+        ? venv.command
+        : await runCommand(options.meta.generation.setupCommand, {
+            cwd: workingCandidate,
+            timeoutMs: options.installTimeoutMs ?? INSTALL_TIMEOUT_MS,
+            ...(env === undefined ? {} : { env }),
+          });
     report({
       name: 'install',
       ok: install.ok,
@@ -100,6 +119,7 @@ export async function verify(options: VerifyOptions): Promise<VerifyReport> {
       ? await runCommand(options.meta.generation.testCommand, {
           cwd: workingCandidate,
           timeoutMs: options.testTimeoutMs ?? TEST_TIMEOUT_MS,
+          ...(env === undefined ? {} : { env }),
         })
       : skipped(options.meta.generation.testCommand, 'install failed');
     report({
@@ -116,6 +136,7 @@ export async function verify(options: VerifyOptions): Promise<VerifyReport> {
             packageDir,
             installedCandidateDir: workingCandidate,
             testCommand: options.meta.generation.testCommand,
+            ...(env === undefined ? {} : { env }),
             ...(options.testTimeoutMs === undefined ? {} : { timeoutMs: options.testTimeoutMs }),
           })
         : undefined;
@@ -170,7 +191,7 @@ export async function verify(options: VerifyOptions): Promise<VerifyReport> {
       failures,
     });
 
-    const environmental = install.timedOut || !secrets.ran;
+    const environmental = install.timedOut || !secrets.ran || venvFailed;
 
     return {
       ok: failures.length === 0,

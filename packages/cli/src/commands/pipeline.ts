@@ -32,6 +32,30 @@ export function parsePositiveNumber(value: string): number {
   return parsed;
 }
 
+/**
+ * Surfaces belong to the role they were selected for.
+ *
+ * S4 is an agent call, so reusing its artifact is the whole point of `--resume` — but only
+ * when the resumed run picked surfaces for the role being asked for now. Resuming a frontend
+ * run as `--role backend` has to re-run S4, and saying otherwise made the banner claim a
+ * reuse that never happened.
+ */
+export function reusableSurfaces(
+  surfaces: Surfaces | undefined,
+  role: string,
+): Surfaces | undefined {
+  if (surfaces === undefined || surfaces.role !== role) return undefined;
+
+  // Surfaces picked before fullstack could name a seam describe one side of it. Reusing them
+  // would resume straight back into the bug they were the cause of, and cost an S5 call to
+  // find that out.
+  if (role === 'fullstack' && surfaces.surfaces.some((s) => s.seamComponentId === undefined)) {
+    return undefined;
+  }
+
+  return surfaces;
+}
+
 export interface MappedRepo {
   run: RunDir;
   ingest: Ingest;
@@ -81,9 +105,11 @@ export async function mapRepo(repo: string, options: SharedOptions): Promise<Map
     const roles =
       resumed.roles ??
       (await roleMenu({ run: resumed.run, ingest: resumed.ingest, components })).roles;
-    log('S3  reused');
+    if (resumed.roles !== undefined) log('S3  reused');
 
-    if (resumed.surfaces !== undefined) log('S4  reused');
+    // S4 is deliberately not reported here. Surfaces are role-specific, and only the caller
+    // knows which role it is about to ask for, so a banner printed at this point announced
+    // "S4  reused" for frontend surfaces and then re-ran S4 for backend on the next line.
 
     return {
       run: resumed.run,

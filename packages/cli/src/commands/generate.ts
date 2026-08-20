@@ -16,6 +16,7 @@ import {
   indentDetail,
   mapRepo,
   parsePositiveNumber,
+  reusableSurfaces,
   type SharedOptions,
 } from './pipeline.js';
 
@@ -43,7 +44,7 @@ export function generateCommand(): Command {
     )
     .option('--max-size-mb <mb>', 'repository size cap', parsePositiveNumber, 200)
     .option('--model <model>', 'model for the agent calls (defaults to the CLI default)')
-    .option('--no-repair', 'fail on the first bad package instead of regenerating once')
+    .option('--no-repair', 'fail on the first bad package instead of repairing it once')
     .option('--json', 'print meta.json instead of a summary', false)
     .action(async (repo: string, options: GenerateOptions) => {
       if (!options.auto && options.surface === undefined) {
@@ -58,15 +59,10 @@ export function generateCommand(): Command {
 
       assertRoleSupported(mapped.roles, options.role);
 
-      // A resumed run that already picked surfaces for this role reuses them; S4 is an agent
-      // call, and re-paying for it while iterating on generation is the whole thing --resume
-      // exists to avoid.
-      const reusable =
-        mapped.surfaces !== undefined && mapped.surfaces.role === options.role
-          ? mapped.surfaces
-          : undefined;
+      const reusable = reusableSurfaces(mapped.surfaces, options.role);
 
-      if (!options.json && reusable === undefined) console.error('S4  selecting surfaces…');
+      if (!options.json)
+        console.error(reusable === undefined ? 'S4  selecting surfaces…' : 'S4  reused');
 
       const selected =
         reusable !== undefined
@@ -100,6 +96,11 @@ export function generateCommand(): Command {
         repairAttempts: options.repair === false ? 0 : 1,
         ...(options.model === undefined ? {} : { model: options.model }),
         onAttempt: (attempt) => reportAttempt(options.json, attempt),
+        onSubstitution: (reason) => {
+          // Never silent: seniority is a scope knob that means something, so a substituted
+          // archetype has to be visible to whoever reviews the package.
+          console.error(`\n!   ${reason}\n`);
+        },
         onStep: (step) => {
           if (options.json) return;
           const mark = step.ok ? 'ok  ' : 'FAIL';
@@ -108,8 +109,8 @@ export function generateCommand(): Command {
         onRepair: (failures) => {
           if (options.json) return;
           console.error(
-            `\nS5  verification failed; regenerating once with ${failures.length} problem(s) ` +
-              'fed back',
+            `\nS5  verification failed; repairing the package in place with ` +
+              `${failures.length} problem(s) fed back`,
           );
         },
       });
@@ -122,7 +123,7 @@ export function generateCommand(): Command {
       const files = Object.keys(result.meta).length > 0 ? await listPackage(result.packageDir) : [];
       console.log(`\n${formatPackage(result.meta, files)}`);
       if (result.generations > 1) {
-        console.log(`\nTook ${result.generations} generation attempts (one repair loop).`);
+        console.log(`\nNeeded ${result.generations - 1} repair round(s) after the first attempt.`);
       }
       console.log(
         `\nVerified. Wrote ${result.package.zipPath} (${formatBytes(result.package.bytes)})`,

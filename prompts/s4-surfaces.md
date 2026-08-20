@@ -40,6 +40,29 @@ three sibling packages is worth less than a dull one that does not.
 A surface needs somewhere for a bug to hide. "It reads a row and returns it" is not rich.
 "It applies a signed delta and must reject anything that would take stock below zero" is.
 
+## Fullstack surfaces span the seam
+
+**This section applies only when the role is `fullstack`. Skip it otherwise.**
+
+Fullstack is assessed on a **vertical slice**: one workflow followed across the boundary
+between the UI and the code serving it. A surface naming a single component is not a
+fullstack surface, however good it is on its own — a candidate handed one would be doing a
+backend task or a frontend task with the wrong label on it.
+
+So every surface you return must name two components: `componentId` for the side the workflow
+starts on, and `seamComponentId` for the other side. `paths` must contain the files on **both**
+sides — the component that renders the screen and the endpoint or handler it calls, or the
+client that submits a form and the validation that rejects it.
+
+Score **isolation for the pair as a unit**: how cleanly the two sides lift out _together_,
+away from the rest of the repo. Do not mark a surface down for the dependency that connects
+them — that dependency is the thing being assessed. A pair that needs only each other and a
+database scores high; a pair that also drags in three sibling services scores low.
+
+Pick the seam where the contract is most visible: a request shape with validation on both
+sides, an error the server returns and the client has to render, a state the two must agree
+on. "The page calls an endpoint" is not enough on its own.
+
 ## Rules
 
 - Every surface must sit inside one of the in-lane components listed in the context, and
@@ -55,6 +78,8 @@ A surface needs somewhere for a bug to hide. "It reads a row and returns it" is 
 - `id` — short lowercase slug, unique: `stock-adjustment`, `shipment-recording`.
 - `title` — a human phrase: "Stock adjustment with non-negative invariant".
 - `componentId` — the in-lane component it belongs to.
+- `seamComponentId` — **fullstack only**: the component on the other side of the seam. Omit
+  it for every other role.
 - `paths` — the files that make up the surface, most important first.
 - `summary` — two or three sentences on what the workflow does.
 - `scores` — `isolation`, `representativeness`, `richness`, each 0 to 1.

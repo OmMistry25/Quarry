@@ -737,6 +737,224 @@ Options, none free, none taken here:
 Recommended: the third for the MVP, the first for v2. Frontend is a known gap with a known
 cause, not a mystery.
 
+---
+
+## Phase 7 — Latency, and the roles that were blocked on it
+
+### The target moved to 20 minutes, and the repair loop is what had to change
+
+Om's call: raise the target to 20 minutes **and** invest in hitting it. Both are now done, and
+the second turned out to be a smaller job than expected once the measurement was read
+properly.
+
+A clean run is ~15 minutes and was already inside 20. What broke the budget was the repair:
+the loop regenerated the whole package from scratch, so a run that needed one cost ~29–31
+minutes. **Latency was a repair-cost problem, not a generation-speed problem.**
+
+So the repair no longer regenerates. It hands the agent the package it already wrote, tells it
+what failed, and asks it to edit in place. That is a better fit for what actually goes wrong —
+the dominant failure is a handful of wrong lines in a package that is otherwise sound — and it
+is still the single loop SPEC allows, just a cheaper implementation of it.
+
+The repair prompt restates the invariants that a repair has broken before: the synthesis rule
+first, since a previous repair fixed its reported failure by copying from the reference; and
+the archetype rule, so a bug hunt cannot quietly remove its own planted bug to make the tests
+pass.
+
+SPEC acceptance 1 and `goals.md` metric 3 both now read 20 minutes, with the reason recorded
+in place rather than silently edited.
+
+### Frontend falls back to an extension, out loud
+
+Also Om's call. `--role frontend --seniority junior` now generates an **extension** and says
+so on stderr, rather than attempting a bug hunt that five documenso runs showed cannot work.
+
+The substitution is returned by `resolveTask()` rather than applied inside it, so every caller
+has to decide how to announce it and none can do it silently. Seniority is a scope knob that
+means something — a junior task is meant to be a bug hunt — and quietly handing a reviewer an
+extension would misrepresent what they are looking at. `meta.json` records what was actually
+generated, not what was requested.
+
+### The `data` role was unreachable, and the cause was S2's granularity
+
+`--role data` had never produced anything, and mapping `getredash/redash` showed why. Redash
+runs three processes off one `pyproject.toml` — server, worker, scheduler — and S2 returned a
+single `backend-api` component covering `redash/**`. `redash/tasks/**` is real RQ worker code
+with its own compose services, but the data lane is defined by component *kind*, so a worker
+folded into a `backend-api` component is invisible. The role menu said:
+
+```
+data       none   no data pipeline or worker components.
+```
+
+S2 was following its prompt exactly: "its own manifest" is the strongest listed signal, and
+the standing instruction is to merge when unsure. Both are right for layers — `routes/`,
+`services/`, `models/` are not components. They are wrong for **processes**, which are
+deployed, scaled and broken independently.
+
+The prompt now carves out a process when the repo's own deployment description (compose
+services, a Procfile, k8s manifests, CI) runs one package as several long-lived ones, using
+the `!` negation the matcher already supported so parent and child paths stay disjoint.
+
+Re-mapping redash produced the worker component, citing the `dev_worker` and `dev_scheduler`
+compose commands as its evidence, and `data` moved `none` → `weak`. Cost was unchanged
+($0.265 → $0.289).
+
+This is the same root cause as the fullstack seam limitation logged in phase 6 — kind decided
+per package rather than per concern — so it is one blind spot, not two.
+
+**Still open:** redash's data lane is `weak`, because the carved-out worker is 945 loc and its
+tests live in the parent component's `tests/` tree. The phase-6 fix that counts tests from
+*neutral* components does not reach them: `tests/` belongs to `backend-api`, which is another
+role's lane. A worker whose tests sit outside its own paths will keep scoring weak.
+
+### The resume banner claimed a reuse that never happened
+
+Resuming the documenso frontend run as `--role backend` printed `S4  reused` and then
+`S4  selecting surfaces…` two lines later. `mapRepo` logged the reuse whenever `surfaces.json`
+existed, but surfaces belong to the role they were selected for, and only the caller knows
+which role it is about to ask for. Cheap to fix, and worth fixing quickly: the banner is how
+I read whether `--resume` actually saved an agent call, so a banner that overstates reuse
+makes every cost estimate downstream of it wrong.
+
+### The repair loop fired live, and its own record was wrong about it
+
+documenso `--role backend --seniority junior`, resumed from the frontend run. Attempt 1 was
+correct in every respect except eight copied lines — install, tests, bug demonstrability and
+gitleaks all passed, and only the overlap check failed:
+
+```
+src/security/reject-internal-target.ts:18
+  matches packages/lib/server-only/webhooks/assert-webhook-url.ts:39
+```
+
+The repair fixed that one file in place and the package verified. **S5 including the repair
+was 540 s** — less than either clean phase-6 run (874 s, 863 s), where a repair meant
+regenerating everything. That is the phase's central claim, measured on a live failure rather
+than argued from unit tests.
+
+Second time invariant 1 has caught real copying, on a different repo and a different surface.
+Both times the generator reached for the reference when writing something that felt like
+boilerplate — a form submit handler, then an SSRF host check.
+
+The packaged `meta.json` then said the run took one clean generation. `repairPackage()`
+returns its cost and the loop dropped it, so the `$3.255` printed was generation alone, and
+nothing recorded that this package had needed fixing at all. An interviewer reading
+`meta.json` before sending the take-home out could not have told. `generation.repairs` now
+counts rounds and `costUsd` accumulates every agent call.
+
+Worth naming the pattern: **the fix and the record of the fix are separate pieces of work,
+and finishing the first feels like finishing both.** Same shape as the two phase-6
+diagnostics bugs, where a correct check destroyed the evidence needed to act on it.
+
+### The data role works, and the split rule is what unblocked it
+
+redash `--role data --seniority junior`, on the `worker` component that only exists because of
+the process-split rule above. Verified first time, no repair: 21 files, `pip install -r
+requirements.txt` / `pytest -q`, checked-in `data/instruments.json` as the sample dataset the
+role archetype's stub strategy calls for, and `interviewer/test_verify.py` under the pytest
+naming the phase-6 fix established.
+
+The surface was redash's query-execution de-duplication lock; the package is a lab instrument
+job scheduler where resubmitting a sample silently fails to queue. Same shape — a lock keyed
+on a hash that outlives the run it belongs to — and a completely different domain. The brief
+is an incident report that states the symptom, never the cause, and never names a file.
+
+A `weak` lane produced a package worth shipping. That is one data point, not a rule, but it
+argues the rating gates the wrong thing: 945 loc was plenty, because S5 synthesises rather
+than excerpts, and what it needs from a lane is a *good surface*, not a big one.
+
+### Verifying a Python package proved almost nothing
+
+The fullstack run failed on `ModuleNotFoundError: No module named 'flask'` for a package that
+declares flask and whose 23 tests pass. On this container pip installs into
+`/usr/local/lib/python3.11/dist-packages`, while `pytest` on PATH is `/root/.local/bin/pytest`
+with the shebang `#!/root/.local/share/uv/tools/pytest/bin/python` — a uv-managed tool venv
+that can see nothing pip installs. Install and tests ran in two different interpreters.
+
+S6 called it a package failure and spent a repair round on it. Third time this shape has
+appeared: a check that is wrong about *why* something failed sends the repair after a problem
+that does not exist, and in phase 6 that wasted repair is what broke the synthesis rule.
+
+Python verification now builds a virtualenv beside the package. The part I did not expect:
+**before this, the install step proved almost nothing.** pip answered "Requirement already
+satisfied" from the host's site-packages, so `requests` in phase 6 and the data package
+earlier today were both verified against dependencies that happened to be lying around. Their
+tests really passed, so the results stand — but a package could have shipped a dependency list
+that never once installed.
+
+The venv then exposed the second half immediately: pip could not reach PyPI, because the
+sandbox allowlist carries npm's proxy and CA settings and none of Python's. `PIP_CERT` and
+`REQUESTS_CA_BUNDLE` are set on this machine and were being scrubbed. Same gap as the
+HTTPS_PROXY bug, and it stayed hidden for exactly as long as installs never opened a socket.
+
+### Fullstack verified, and the package is not fullstack
+
+The re-run passed every check and produced a package with **no frontend in it at all** — 16
+files, `app.py`, a Flask API, models, pytest. Zero files matching react, jsx, html, fetch or
+axios. The brief is a backend ticket.
+
+Nothing caught it, and the cause is not S5 ignoring its instructions. It is S4. Every surface
+offered for the fullstack role belongs to exactly one component:
+
+```
+0.89 [backend-api] Query refresh scheduling with interval, exact-time and backoff rules
+0.83 [viz-lib]     Counter visualization value, target and trend computation
+0.81 [client]      Date-range query parameter normalization and execution formatting
+```
+
+SPEC defines a surface as "a self-contained workflow **inside a component**", and `Surface` has
+one `componentId`. So for a role whose whole definition is "assessed on a vertical slice across
+the seam", S4 cannot express the thing being asked for. S5 was handed a backend-api surface and
+wrote a backend package, correctly.
+
+This is the phase-6 fullstack note from the other side. That one was "the seam can live inside
+one component, where the kind-based rule cannot see it"; this one is "the seam spans two
+components, and a surface cannot". Same underlying assumption — one component per unit of work
+— failing in both directions.
+
+**Fixed.** Om asked for the judgement call, and the deciding fact was that `mvp.md` lists all
+four archetypes in scope while the role menu rates fullstack STRONG on most repos — so a user
+will pick it. Refusing a role the menu just called STRONG is incoherent; returning a backend
+package under a fullstack label is worse.
+
+A surface may now name `seamComponentId`. Two consequences were not obvious going in:
+
+- **Isolation is weighted highest (0.4), so the ranking was the second half of the bug.** Even
+  if S4 had proposed a seam surface, scoring the sides separately would have marked it down for
+  the dependency that is the whole point of it, and buried it under single-component surfaces.
+  The prompt now asks for isolation *of the pair as a unit*. Totals fell from 0.89 to 0.73,
+  which is the honest number.
+- **Reference material had to be taken round-robin, not in sequence.** redash is 48k loc of
+  Python against 29k of JavaScript, so filling the budget in order would have left the
+  generator nothing to mirror on the client side. The verified run drew 19 client files and 12
+  server files; the pre-fix run drew backend files only.
+
+The result installs with one command and the contract matches across the seam — the client
+calls `/api/equipment/:id/schedule`, the server defines it — with tests on both sides.
+
+I did not add an S6 shape check demanding both sides. With S4 unable to offer a seam surface,
+that would have failed every fullstack run: a missing capability dressed up as a verification
+failure.
+
+**What I would not do:** add an S6 shape check demanding both sides. With S4 unable to offer a
+seam surface, that would fail every fullstack run — dressing up a missing capability as a
+verification failure.
+
+### Phase 7 result
+
+Four roles, four verified packages, two repos:
+
+| Repo | Role / seniority | Task | S5 | Cost | Repairs |
+|---|---|---|---|---|---|
+| documenso | frontend / mid | extension | 444 s | $2.78 | 0 |
+| documenso | backend / junior | bug-hunt | 540 s | $3.26 | 1 |
+| redash | data / junior | bug-hunt | 723 s | $3.91 | 0 |
+| redash | fullstack / mid | extension | ~600 s | $3.24 | 0 |
+
+Every one inside the 20-minute target, including the one that needed a repair — which is the
+phase's central claim, and the repair round is why the number is defensible rather than lucky.
+
 ### Out-of-scope temptations logged, not built
 
 - _(none yet)_

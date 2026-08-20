@@ -51,6 +51,47 @@ describe('Meta schema', () => {
     expect(() => Meta.parse(withVerification)).not.toThrow();
   });
 
+  /**
+   * The first live repair packaged a run whose meta.json said one clean generation, because
+   * the loop updated the commands a repair had corrected but not the fact that it ran.
+   */
+  it('defaults repairs to zero, so a clean run says so rather than saying nothing', () => {
+    expect(Meta.parse(meta()).generation.repairs).toBe(0);
+  });
+
+  it('records repair rounds when there were some', () => {
+    const repaired = meta({
+      generation: {
+        startedAt: '2026-08-19T16:45:00.000Z',
+        finishedAt: '2026-08-19T16:52:00.000Z',
+        attempts: 1,
+        repairs: 1,
+        costUsd: 3.9,
+        referenceFiles: ['src/services/inventory.ts'],
+        setupCommand: 'npm install',
+        testCommand: 'npm test',
+      },
+    });
+
+    expect(Meta.parse(repaired).generation.repairs).toBe(1);
+  });
+
+  it('rejects a negative repair count', () => {
+    const negative = meta({
+      generation: {
+        startedAt: '2026-08-19T16:45:00.000Z',
+        finishedAt: '2026-08-19T16:52:00.000Z',
+        attempts: 1,
+        repairs: -1,
+        referenceFiles: [],
+        setupCommand: 'npm install',
+        testCommand: 'npm test',
+      },
+    });
+
+    expect(() => Meta.parse(negative)).toThrow();
+  });
+
   it('requires both commands, since one-command setup is an invariant', () => {
     const generation = { ...(meta() as { generation: Record<string, unknown> }).generation };
     generation.setupCommand = '';

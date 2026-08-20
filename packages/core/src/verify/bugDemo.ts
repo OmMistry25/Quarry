@@ -33,6 +33,8 @@ export interface BugDemoOptions {
   installedCandidateDir: string;
   testCommand: string;
   timeoutMs?: number;
+  /** The install step's environment — a Python package's virtualenv, when it has one. */
+  env?: NodeJS.ProcessEnv;
 }
 
 /** `interviewer/verify.test.ts` → `verify.test.ts` */
@@ -135,6 +137,7 @@ export async function checkBugDemonstrable(options: BugDemoOptions): Promise<Bug
   const starterSuite = await runCommand(options.testCommand, {
     cwd: options.installedCandidateDir,
     timeoutMs,
+    ...(options.env === undefined ? {} : { env: options.env }),
   });
   runs.push(starterSuite);
 
@@ -149,6 +152,7 @@ export async function checkBugDemonstrable(options: BugDemoOptions): Promise<Bug
   const onStarter = await runCommand(`${options.testCommand} ${verifyRelPath}`, {
     cwd: options.installedCandidateDir,
     timeoutMs,
+    ...(options.env === undefined ? {} : { env: options.env }),
   });
   runs.push(onStarter);
 
@@ -157,6 +161,7 @@ export async function checkBugDemonstrable(options: BugDemoOptions): Promise<Bug
   const onFixed = await runCommand(`${options.testCommand} ${verifyRelPath}`, {
     cwd: options.installedCandidateDir,
     timeoutMs,
+    ...(options.env === undefined ? {} : { env: options.env }),
   });
   runs.push(onFixed);
 

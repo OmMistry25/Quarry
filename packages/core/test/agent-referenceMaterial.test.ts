@@ -101,6 +101,76 @@ describe('buildReferenceMaterial', () => {
     expect(material.included).not.toContain('.env');
   });
 
+  /**
+   * A fullstack surface names two components. Before this, reference material was gathered
+   * from `componentId` alone, so the generator saw one side of the seam it had been asked to
+   * build across — and wrote a package with nothing on the other side.
+   */
+  describe('a surface that spans a seam', () => {
+    const twoComponents = (): Components => ({
+      ...components,
+      components: [
+        {
+          ...components.components[0]!,
+          id: 'routes',
+          paths: ['src/routes/**'],
+        },
+        {
+          ...components.components[0]!,
+          id: 'services',
+          paths: ['src/services/**'],
+        },
+      ],
+    });
+
+    const seamSurface = (): Surface => ({
+      ...surface,
+      componentId: 'routes',
+      seamComponentId: 'services',
+      paths: ['src/routes/items.ts'],
+    });
+
+    it('gathers reference material from both sides', async () => {
+      const material = await buildReferenceMaterial(
+        seamSurface(),
+        twoComponents(),
+        ingested,
+        repoDir,
+      );
+
+      expect(material.included).toContain('src/routes/shipments.ts');
+      expect(material.included).toContain('src/services/inventory.ts');
+    });
+
+    it('takes the two sides in turn, so the larger one cannot spend the whole budget', async () => {
+      const material = await buildReferenceMaterial(
+        seamSurface(),
+        twoComponents(),
+        ingested,
+        repoDir,
+        {
+          ...DEFAULT_REFERENCE_BUDGET,
+          maxFiles: 4,
+        },
+      );
+
+      const sides = new Set(
+        material.included
+          .filter((file) => file.startsWith('src/'))
+          .map((file) => file.split('/')[1]),
+      );
+
+      expect(sides).toContain('routes');
+      expect(sides).toContain('services');
+    });
+
+    it('still reads one component when there is no seam', async () => {
+      const material = await buildReferenceMaterial(surface, components, ingested, repoDir);
+
+      expect(material.included.length).toBeGreaterThan(0);
+    });
+  });
+
   it('lists each file once even when it is both surface path and component file', async () => {
     const material = await buildReferenceMaterial(surface, components, ingested, repoDir);
 

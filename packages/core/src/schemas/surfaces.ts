@@ -31,6 +31,15 @@ export const Surface = z.object({
   title: z.string().min(1),
   /** The component this surface lives in. Checked against components.json. */
   componentId: z.string().min(1),
+  /**
+   * The other side of the seam, for a role assessed on a vertical slice.
+   *
+   * A surface is normally one workflow inside one component, which is why `componentId` is
+   * singular. Fullstack is the exception its definition demands: "assessed on a vertical
+   * slice across the seam" cannot be expressed by a surface that names one component, and a
+   * fullstack run that could only name one produced a package with no frontend in it.
+   */
+  seamComponentId: z.string().min(1).optional(),
   /** Repo-relative paths that make up the surface. */
   paths: z.array(z.string().min(1)).min(1),
   /** What the workflow does, in a couple of sentences. */
