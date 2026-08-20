@@ -52,6 +52,75 @@ async function recordedReply(): Promise<string> {
   return fs.readFile(RECORDED_S4, 'utf8');
 }
 
+/**
+ * Fullstack is defined as a vertical slice across the seam, but a surface names one
+ * component — so S4 offered three single-component surfaces, S5 faithfully generated one
+ * side, and a "fullstack" package shipped with no frontend in it and passed every check.
+ */
+describe('a fullstack surface has to span the seam', () => {
+  const seamComponents = (): Components => ({
+    ...components,
+    components: [
+      { ...components.components[0]!, id: 'web', kind: 'frontend-app', paths: ['src/routes/**'] },
+      { ...components.components[0]!, id: 'api', kind: 'backend-api', paths: ['src/services/**'] },
+    ],
+  });
+
+  const surfacesReply = (extra: Record<string, unknown>): string =>
+    JSON.stringify({
+      surfaces: [1, 2, 3].map((n) => ({
+        id: `slice-${n}`,
+        title: `Slice ${n}`,
+        componentId: 'web',
+        paths: ['src/routes/items.ts', 'src/services/inventory.ts'],
+        summary: 'A workflow followed from the screen to the handler serving it.',
+        scores: { isolation: 0.8, representativeness: 0.8, richness: 0.8 },
+        rationale: 'Both sides lift out together and depend on nothing else.',
+        assessmentIdea: 'The rejection the server returns and the screen has to render.',
+        ...extra,
+      })),
+    });
+
+  const select = async (reply: string): Promise<unknown> =>
+    surfaceSelection({
+      run,
+      ingest: ingested,
+      components: seamComponents(),
+      role: 'fullstack',
+      now: NOW,
+      transport: async (): Promise<AgentReply> => ({ text: reply, costUsd: 0 }),
+    });
+
+  it('accepts a surface naming both sides', async () => {
+    await expect(select(surfacesReply({ seamComponentId: 'api' }))).resolves.toBeDefined();
+  });
+
+  it('rejects a surface naming only one component', async () => {
+    await expect(select(surfacesReply({}))).rejects.toThrow();
+  });
+
+  it('rejects a seam whose two sides are the same component', async () => {
+    await expect(select(surfacesReply({ seamComponentId: 'web' }))).rejects.toThrow();
+  });
+
+  it('rejects a seam pointing at a component that is not in lane', async () => {
+    await expect(select(surfacesReply({ seamComponentId: 'nope' }))).rejects.toThrow();
+  });
+
+  it('leaves single-component roles alone', async () => {
+    const backend = await surfaceSelection({
+      run,
+      ingest: ingested,
+      components,
+      role: 'backend',
+      now: NOW,
+      transport: async (): Promise<AgentReply> => ({ text: await recordedReply(), costUsd: 0 }),
+    });
+
+    expect(backend.surfaces.surfaces[0]?.seamComponentId).toBeUndefined();
+  });
+});
+
 describe('S4 surface selection with a recorded reply', () => {
   it('writes a surfaces.json that satisfies its own schema', async () => {
     const reply = await recordedReply();

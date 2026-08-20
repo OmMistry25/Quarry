@@ -236,6 +236,13 @@ function taskBrief(
     `> **${surface.title}**\n>\n` +
     `> ${surface.summary}\n>\n` +
     `> Suggested angle: ${surface.assessmentIdea}\n\n` +
+    (surface.seamComponentId === undefined
+      ? ''
+      : `This surface spans a seam: **${surface.componentId}** on one side, ` +
+        `**${surface.seamComponentId}** on the other. Both sides must be real in what you ` +
+        'write — the UI and the code serving it, wired together and tested across the ' +
+        'boundary. A package containing only one side of the seam does not assess this ' +
+        'role.\n\n') +
     'Mirror this workflow. The planted bug must be one a competent engineer could plausibly ' +
     'have written — an off-by-one on a boundary, a wrong comparison operator, a missing ' +
     'guard, a mis-ordered pair of operations. Never a typo, never obviously broken code, ' +

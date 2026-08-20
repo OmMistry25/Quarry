@@ -45,7 +45,7 @@ export interface ReferenceMaterial {
  */
 function orderCandidates(
   surface: Surface,
-  component: Component | undefined,
+  scope: readonly Component[],
   ingest: Ingest,
 ): TreeEntry[] {
   const byPath = new Map(ingest.tree.map((entry) => [entry.path, entry]));
@@ -60,13 +60,15 @@ function orderCandidates(
 
   for (const filePath of surface.paths) push(byPath.get(filePath));
 
-  const componentFiles = component ? filesForComponent(component, ingest.tree) : [];
+  const filesByComponent = scope.map((component) => filesForComponent(component, ingest.tree));
 
-  for (const file of componentFiles) {
-    if (isTestPath(file.path) && isAssessableLanguage(file.lang)) push(file);
+  for (const componentFiles of filesByComponent) {
+    for (const file of componentFiles) {
+      if (isTestPath(file.path) && isAssessableLanguage(file.lang)) push(file);
+    }
   }
 
-  const componentPaths = new Set(componentFiles.map((file) => file.path));
+  const componentPaths = new Set(filesByComponent.flat().map((file) => file.path));
   for (const manifest of ingest.manifests) {
     // The component's own manifests, plus any root manifest: a root package.json names the
     // stack even when it sits outside the component's paths.
@@ -74,8 +76,26 @@ function orderCandidates(
     if (componentPaths.has(manifest.path) || isRootManifest) push(byPath.get(manifest.path));
   }
 
-  for (const file of [...componentFiles].sort((a, b) => (b.loc ?? 0) - (a.loc ?? 0))) {
-    if (isAssessableLanguage(file.lang)) push(file);
+  // Round-robin, largest first within each side. A seam surface spans two components of very
+  // different sizes — redash is 48k loc of Python against 29k of JavaScript — and taking
+  // them in sequence would spend the whole budget on the bigger one and leave the generator
+  // with nothing to mirror on the other side of the seam it was asked to build.
+  const remaining = filesByComponent.map((componentFiles) =>
+    [...componentFiles]
+      .filter((file) => isAssessableLanguage(file.lang))
+      .sort((a, b) => (b.loc ?? 0) - (a.loc ?? 0)),
+  );
+
+  for (let index = 0; ; index += 1) {
+    let pushedAny = false;
+    for (const componentFiles of remaining) {
+      const file = componentFiles[index];
+      if (file !== undefined) {
+        push(file);
+        pushedAny = true;
+      }
+    }
+    if (!pushedAny) break;
   }
 
   return ordered;
@@ -88,8 +108,11 @@ export async function buildReferenceMaterial(
   repoDir: string,
   budget: ReferenceBudget = DEFAULT_REFERENCE_BUDGET,
 ): Promise<ReferenceMaterial> {
-  const component = components.components.find((entry) => entry.id === surface.componentId);
-  const candidates = orderCandidates(surface, component, ingest);
+  const scope = [surface.componentId, surface.seamComponentId]
+    .filter((id): id is string => id !== undefined)
+    .map((id) => components.components.find((entry) => entry.id === id))
+    .filter((entry): entry is Component => entry !== undefined);
+  const candidates = orderCandidates(surface, scope, ingest);
 
   const parts: string[] = [];
   const included: string[] = [];
