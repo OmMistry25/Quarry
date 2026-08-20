@@ -3,13 +3,13 @@ import type { Surfaces } from 'core';
 
 import { reusableSurfaces } from '../src/commands/pipeline.js';
 
-const surfaces = (role: string): Surfaces =>
+const surfaces = (role: string, entries: unknown[] = []): Surfaces =>
   ({
     schemaVersion: 1,
     runId: 'r',
     generatedAt: '2026-08-19T00:00:00.000Z',
     role,
-    surfaces: [],
+    surfaces: entries,
   }) as unknown as Surfaces;
 
 describe('reusableSurfaces', () => {
@@ -24,6 +24,16 @@ describe('reusableSurfaces', () => {
    */
   it('does not reuse surfaces picked for a different role', () => {
     expect(reusableSurfaces(surfaces('frontend'), 'backend')).toBeUndefined();
+  });
+
+  it('reuses fullstack surfaces that name both sides of the seam', () => {
+    const picked = surfaces('fullstack', [{ seamComponentId: 'api' }]);
+    expect(reusableSurfaces(picked, 'fullstack')).toBe(picked);
+  });
+
+  /** Reusing these resumed straight back into the bug that produced them. */
+  it('discards fullstack surfaces picked before a surface could name a seam', () => {
+    expect(reusableSurfaces(surfaces('fullstack', [{}]), 'fullstack')).toBeUndefined();
   });
 
   it('has nothing to reuse on a fresh run', () => {

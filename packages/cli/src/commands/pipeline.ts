@@ -44,7 +44,16 @@ export function reusableSurfaces(
   surfaces: Surfaces | undefined,
   role: string,
 ): Surfaces | undefined {
-  return surfaces !== undefined && surfaces.role === role ? surfaces : undefined;
+  if (surfaces === undefined || surfaces.role !== role) return undefined;
+
+  // Surfaces picked before fullstack could name a seam describe one side of it. Reusing them
+  // would resume straight back into the bug they were the cause of, and cost an S5 call to
+  // find that out.
+  if (role === 'fullstack' && surfaces.surfaces.some((s) => s.seamComponentId === undefined)) {
+    return undefined;
+  }
+
+  return surfaces;
 }
 
 export interface MappedRepo {
