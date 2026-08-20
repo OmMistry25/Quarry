@@ -1119,20 +1119,41 @@ check reported as an unwritable volume. Blank now counts as unset, and the defau
 and its absence is the signal that this is somebody's checkout.
 
 **`claude: false`.** `npm install -g @anthropic-ai/claude-code` succeeded at build time —
-"added 9 packages" — and the binary was not on PATH at runtime. Made it a dependency of the
-web app instead, so the lockfile pins it. That surfaced two more layers:
+"added 9 packages" — and the binary was not on PATH at runtime.
+
+My first fix was to make it a dependency of the web app, so the lockfile would pin it. That
+was wrong, and CI said so in fifteen seconds:
+
+```
+ERR_PNPM_UNSUPPORTED_ENGINE
+Your Node version is incompatible with "@anthropic-ai/claude-code@2.1.237".
+Expected version: >=22.0.0    Got: v20.20.2
+```
+
+The CLI requires Node 22 and this repo's floor is 20, so depending on it would break
+`pnpm install` for every contributor on Node 20 — raising the floor to fix a deploy path is a
+product decision, not a deploy fix. Same shape as the execa 10 problem in phase 6, and caught
+by the same Node 20 pin. **Worth keeping that pin precisely because it keeps catching this.**
+
+It also surfaced two things worth remembering even though the approach was abandoned:
 
 - pnpm 10 blocks postinstall scripts unless the package is allowlisted, so the binary
   installed and refused to run with "claude native binary not installed" — which on a deploy
   is indistinguishable from it being absent.
 - pnpm puts a **relative** `./node_modules/.bin` on PATH. Every agent call runs in a
   `mkdtemp` outside the repo (the CLAUDE.md-leak fix from phase 2), where a relative entry
-  resolves to nothing. The start script now prefixes PATH with the absolute directory.
+  resolves to nothing.
 
-That last one was nearly missed, because this container has a global `claude` that masked it:
-the relative-PATH test "passed" by finding `/opt/node22/bin/claude`. Railway has no such
-fallback. **A test that can pass for the wrong reason is worse than no test**, and the tell
-was that it passed from a directory where it had no business passing.
+That second one was nearly missed, because this container has a global `claude` that masked
+it: the relative-PATH test "passed" by finding `/opt/node22/bin/claude`. **A test that can
+pass for the wrong reason is worse than no test**, and the tell was that it passed from a
+directory where it had no business passing.
+
+The actual fix keeps CLAUDE.md's contract — `claude` is on PATH — and removes the guesswork
+about *where*: `npm install -g --prefix /usr/local`, verified by running
+`/usr/local/bin/claude --version` in the same build step. An unqualified global install is
+what failed; naming the destination and proving it fails the build rather than the healthcheck
+four minutes later.
 
 **The lesson about the endpoint itself:** it was built to answer "which piece is missing", and
 in its first real use it answered three at once, in one request, with no guessing. Everything

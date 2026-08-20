@@ -2,11 +2,6 @@ packages:
   - 'packages/*'
   - 'apps/*'
 
-# pnpm 10 blocks postinstall scripts unless a package is listed here.
-#
-# esbuild (via tsx and vitest) needs its postinstall to place the platform binary, and so does
-# the Claude CLI: without it the binary is present but refuses to run with "claude native
-# binary not installed", which on a deploy reads as the CLI simply being absent.
+# esbuild (via tsx and vitest) needs its postinstall to place the platform binary.
 onlyBuiltDependencies:
   - esbuild
-  - '@anthropic-ai/claude-code'
