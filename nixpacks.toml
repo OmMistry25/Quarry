@@ -28,7 +28,15 @@ nixPkgs = ['...', 'git', 'gitleaks', 'python3']
 # Not a workspace dependency: the CLI requires Node >= 22 and this repo's floor is 20, so
 # depending on it would fail `pnpm install` for every contributor on Node 20 — which is what
 # CI caught. CLAUDE.md's contract is that `claude` is on PATH, and this satisfies it.
-cmds = ['...', 'npm install -g --prefix /usr @anthropic-ai/claude-code', '/usr/bin/claude --version']
+cmds = [
+  '...',
+  'npm install -g --prefix /usr @anthropic-ai/claude-code',
+  '/usr/bin/claude --version',
+  # A deployment already running has QUARRY_CLAUDE_BIN=/usr/local/bin/claude set as a service
+  # variable, from when that was where the build put it. Moving the binary without leaving
+  # this behind would point a working service at a path that no longer exists.
+  'mkdir -p /usr/local/bin && ln -sf /usr/bin/claude /usr/local/bin/claude',
+]
 
 [phases.build]
 # One command: `web`'s own build script builds core first, so a clean checkout works whatever
