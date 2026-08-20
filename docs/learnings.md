@@ -1026,11 +1026,22 @@ and this container is the counter-example: no key in the environment, `claude` a
 by login, pipeline working all day. Requiring it would 503 a working deploy. It is reported
 now but not part of `ok`.
 
-**Not verified:** there is no Docker daemon in this container, so the image has never been
-built. The external facts it depends on were checked directly rather than assumed — the
-gitleaks release asset returns 200, `@anthropic-ai/claude-code` resolves on npm, and every
-path the Dockerfile copies exists — but the first real `docker build` may still find
-something.
+Om then ruled out Docker, so the Dockerfile went and `nixpacks.toml` replaced it: Railway's
+builder reads the repo and assembles the image itself. `gitleaks` and `python3` come from
+nixpkgs by name rather than a downloaded release tarball, which is strictly better — one less
+pinned URL to rot. The one sharp edge is `npm install -g` against a nix-provided node, which
+would try to write to the read-only nix store, so `NPM_CONFIG_PREFIX` is pinned to
+`/usr/local`.
+
+Vercel-plus-Railway was considered and rejected. The page is ~2 kB of JavaScript, so there is
+no load to offload, and splitting it would add CORS, two deploys to keep in step, and
+cross-origin SSE for nothing.
+
+**Not verified:** nothing here has been deployed, and there is no Docker daemon in this
+container to build an image with either. The `nixpacks.toml` schema was read from the docs
+rather than recalled, and `@anthropic-ai/claude-code` was confirmed to resolve on npm, but the
+first real Railway build may still find something. `/api/health` exists so that it finds it
+loudly.
 
 ### Out-of-scope temptations logged, not built
 

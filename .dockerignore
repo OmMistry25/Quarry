@@ -1,8 +1,0 @@
-# work/ holds cloned repos, node_modules from verification runs and generated packages —
-# 150 MB+ of scratch that would go into the build context and then into the image.
-work/
-**/node_modules/
-**/dist/
-**/.next/
-.git/
-*.log

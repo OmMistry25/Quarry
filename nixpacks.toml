@@ -1,0 +1,33 @@
+# Railway build config. No Dockerfile: Railway's Nixpacks builder reads this and assembles
+# the image itself.
+#
+# What has to be present at runtime is not negotiable — the pipeline shells out to all of it:
+#   git       S1 clones the repository under assessment
+#   gitleaks  S6 fails a run outright when it is missing, rather than skipping the scan
+#   python3   S6 verifies generated Python packages, each in its own venv
+#   claude    every agent stage runs `claude -p --output-format json`
+#
+# `GET /api/health` checks for exactly these and returns 503 if any is missing, so a build
+# that gets this wrong fails at the door rather than ten minutes into a paid run.
+
+[phases.setup]
+nixPkgs = ['...', 'git', 'gitleaks', 'python3']
+
+[phases.install]
+# `npm install -g` into a nix-provided node would try to write to the read-only nix store,
+# so the prefix is pinned to a writable path that is already on PATH.
+cmds = ['...', 'npm install -g @anthropic-ai/claude-code']
+
+[phases.build]
+# core is built because the UI loads it at runtime rather than bundling it.
+cmds = ['pnpm --filter core build', 'pnpm --filter web build']
+
+[start]
+cmd = 'pnpm --filter web start'
+
+[variables]
+NPM_CONFIG_PREFIX = '/usr/local'
+NODE_ENV = 'production'
+# Run directories go on the mounted volume: the run id /api/map hands the browser has to
+# still resolve when /api/generate asks for it.
+QUARRY_WORK_DIR = '/data/work'
