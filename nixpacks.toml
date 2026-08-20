@@ -5,18 +5,18 @@
 #   git       S1 clones the repository under assessment
 #   gitleaks  S6 fails a run outright when it is missing, rather than skipping the scan
 #   python3   S6 verifies generated Python packages, each in its own venv
-#   claude    every agent stage runs `claude -p --output-format json`
+#   claude    every agent stage runs `claude -p --output-format json`. It is a dependency of
+#             the web app rather than a global install: `npm install -g` succeeded at build
+#             time and the binary was not on PATH at runtime, which the live health check
+#             caught as `claude: false`. The start script prefixes PATH with the *absolute*
+#             bin directory, because pnpm's own entry is relative and the agent runs from a
+#             mkdtemp outside the repo, where a relative entry resolves to nothing.
 #
 # `GET /api/health` checks for exactly these and returns 503 if any is missing, so a build
 # that gets this wrong fails at the door rather than ten minutes into a paid run.
 
 [phases.setup]
 nixPkgs = ['...', 'git', 'gitleaks', 'python3']
-
-[phases.install]
-# `npm install -g` into a nix-provided node would try to write to the read-only nix store,
-# so the prefix is pinned to a writable path that is already on PATH.
-cmds = ['...', 'npm install -g @anthropic-ai/claude-code']
 
 [phases.build]
 # One command: `web`'s own build script builds core first, so a clean checkout works whatever
@@ -29,7 +29,6 @@ cmds = ['pnpm --filter web build']
 cmd = 'pnpm --filter web start'
 
 [variables]
-NPM_CONFIG_PREFIX = '/usr/local'
 NODE_ENV = 'production'
 # Run directories go on the mounted volume: the run id /api/map hands the browser has to
 # still resolve when /api/generate asks for it.

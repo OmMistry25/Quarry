@@ -7,10 +7,11 @@
   "scripts": {
     "dev": "next dev",
     "build": "pnpm --filter core build && next build",
-    "start": "next start -H 0.0.0.0 -p ${PORT:-3000}",
+    "start": "PATH=\"$PWD/node_modules/.bin:$PATH\" next start -H 0.0.0.0 -p ${PORT:-3000}",
     "typecheck": "tsc --noEmit"
   },
   "dependencies": {
+    "@anthropic-ai/claude-code": "^2.1.237",
     "core": "workspace:*",
     "next": "^14.2.33",
     "react": "^18.3.1",

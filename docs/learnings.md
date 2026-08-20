@@ -1101,6 +1101,45 @@ rather than recalled, and `@anthropic-ai/claude-code` was confirmed to resolve o
 first real Railway build may still find something. `/api/health` exists so that it finds it
 loudly.
 
+### The live healthcheck earned itself in one request
+
+First reachable deploy, one `curl` of `/api/health`:
+
+```json
+{"ok":false,"missing":["claude","a writable "],
+ "claude":false,"gitleaks":true,"git":true,"workDir":"","writable":false,"apiKey":true}
+```
+
+Three bugs in one response, none of which any local test could have produced.
+
+**`workDir: ""`.** `process.env.QUARRY_WORK_DIR ?? fallback` — and `??` only falls back on
+`undefined`, so a variable set to the empty string won. `mkdir('')` then fails, which the
+check reported as an unwritable volume. Blank now counts as unset, and the default prefers
+`/data/work` when `/data` exists, because a mounted volume is the right answer in a container
+and its absence is the signal that this is somebody's checkout.
+
+**`claude: false`.** `npm install -g @anthropic-ai/claude-code` succeeded at build time —
+"added 9 packages" — and the binary was not on PATH at runtime. Made it a dependency of the
+web app instead, so the lockfile pins it. That surfaced two more layers:
+
+- pnpm 10 blocks postinstall scripts unless the package is allowlisted, so the binary
+  installed and refused to run with "claude native binary not installed" — which on a deploy
+  is indistinguishable from it being absent.
+- pnpm puts a **relative** `./node_modules/.bin` on PATH. Every agent call runs in a
+  `mkdtemp` outside the repo (the CLAUDE.md-leak fix from phase 2), where a relative entry
+  resolves to nothing. The start script now prefixes PATH with the absolute directory.
+
+That last one was nearly missed, because this container has a global `claude` that masked it:
+the relative-PATH test "passed" by finding `/opt/node22/bin/claude`. Railway has no such
+fallback. **A test that can pass for the wrong reason is worse than no test**, and the tell
+was that it passed from a directory where it had no business passing.
+
+**The lesson about the endpoint itself:** it was built to answer "which piece is missing", and
+in its first real use it answered three at once, in one request, with no guessing. Everything
+before it in this deploy — the build failure, the stashed exclusion, fourteen identical
+"service unavailable" lines — cost a round trip each precisely because nothing could report
+its own state.
+
 ### Out-of-scope temptations logged, not built
 
 - _(none yet)_
